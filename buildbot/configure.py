@@ -88,7 +88,8 @@ def do_configure(args):
 
     if args.native_cpu:
         #Todo: we should set whatever targets we support for native cpu
-        libclc_targets_to_build += ';x86_64-unknown-linux-gnu'
+        # libclc_targets_to_build += ';x86_64-unknown-linux-gnu'
+        libclc_targets_to_build += ';'
         sycl_enabled_plugins.append("native_cpu")
 
 
@@ -154,6 +155,7 @@ def do_configure(args):
         "-DCMAKE_BUILD_TYPE={}".format(args.build_type),
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON",
+        "-DLLVM_INCLUDE_BENCHMARKS=OFF",
         "-DLLVM_ENABLE_ASSERTIONS={}".format(llvm_enable_assertions),
         "-DLLVM_TARGETS_TO_BUILD={}".format(llvm_targets_to_build),
         "-DLLVM_EXTERNAL_PROJECTS={}".format(llvm_external_projects),

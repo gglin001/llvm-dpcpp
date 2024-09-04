@@ -3,8 +3,10 @@ git clone -n --depth=1 --filter=tree:0 -b allen/sycl git@github.com:gglin001/llv
 
 pushd llvm-dpcpp
 git sparse-checkout set --no-cone \
-  /buildbot /clang /cmake /devops /libclc /llvm /llvm-spirv /opencl /sycl /sycl-fusion /xpti /xptifw \
-  /_demos /libdevice /third-party
+  /.ci /.github /buildbot /clang /cmake /devops /libclc /libdevice \
+  /llvm-spirv /llvm /opencl /sycl-jit /sycl /third-party \
+  /xpti /xptifw \
+  /_demos '/*.*'
 
 git sparse-checkout list
 git checkout

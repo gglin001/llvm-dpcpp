@@ -96,11 +96,12 @@ def do_configure(args):
         sycl_enabled_backends.append("hip")
 
     if args.native_cpu:
-        #Todo: we should set whatever targets we support for native cpu
-        # libclc_targets_to_build += ';x86_64-unknown-linux-gnu'
-        libclc_targets_to_build += ';'
-        sycl_enabled_plugins.append("native_cpu")
-
+        if args.native_cpu_libclc_targets:
+            libclc_targets_to_build += ";" + args.native_cpu_libclc_targets
+        else:
+            libclc_build_native = "ON"
+        libclc_gen_remangled_variants = "ON"
+        sycl_enabled_backends.append("native_cpu")
 
     # all llvm compiler targets don't require 3rd party dependencies, so can be
     # built/tested even if specific runtimes are not available

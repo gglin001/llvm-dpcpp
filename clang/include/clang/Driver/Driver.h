@@ -426,10 +426,6 @@ public:
     return ClangExecutable.c_str();
   }
 
-  /// Get the path to where the clang executable was installed.
-  const char *getInstalledDir() const {
-    return Dir.c_str();
-  }
   bool isDumpDeviceCodeEnabled() const { return DumpDeviceCode; }
 
   bool isSaveTempsEnabled() const { return SaveTemps != SaveTempsNone; }
@@ -643,8 +639,9 @@ public:
   /// treated before building actions or binding tools.
   ///
   /// \return Whether any compilation should be built for this
-  /// invocation.
-  bool HandleImmediateArgs(const Compilation &C);
+  /// invocation. The compilation can only be modified when
+  /// this function returns false.
+  bool HandleImmediateArgs(Compilation &C);
 
   /// ConstructAction - Construct the appropriate action to do for
   /// \p Phase on the \p Input, taking in to account arguments
@@ -973,12 +970,12 @@ public:
     return SYCLUniqueIDList[FileName];
   }
 
-  /// Reads device config file to find information about the SYCL targets in
-  /// UniqueSYCLTriplesVec, and defines device traits macros accordingly.
-  void populateSYCLDeviceTraitsMacrosArgs(
-      const llvm::opt::ArgList &Args,
-      const llvm::SmallVector<llvm::Triple, 4> &UniqueSYCLTriplesVec);
-
+  /// SYCLDeviceTraitMacroArg - Add the given macro to the vector of args to be
+  /// added to the device compilation step.
+  void addSYCLDeviceTraitsMacroArg(const llvm::opt::ArgList &Args,
+                                   StringRef Macro) const {
+    SYCLDeviceTraitsMacrosArgs.push_back(Args.MakeArgString(Macro));
+  }
   llvm::opt::ArgStringList getDeviceTraitsMacrosArgs() const {
     return SYCLDeviceTraitsMacrosArgs;
   }

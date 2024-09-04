@@ -9,6 +9,8 @@
 #include "bolt/Profile/YAMLProfileWriter.h"
 #include "bolt/Core/BinaryBasicBlock.h"
 #include "bolt/Core/BinaryFunction.h"
+#include "bolt/Profile/BoltAddressTranslation.h"
+#include "bolt/Profile/DataAggregator.h"
 #include "bolt/Profile/ProfileReaderBase.h"
 #include "bolt/Rewrite/RewriteInstance.h"
 #include "llvm/Support/CommandLine.h"
@@ -20,22 +22,29 @@
 
 namespace opts {
 extern llvm::cl::opt<bool> ProfileUseDFS;
+extern llvm::cl::opt<bool> ProfileUsePseudoProbes;
 } // namespace opts
 
 namespace llvm {
 namespace bolt {
 
-/// Set CallSiteInfo destination fields from \p Symbol and return a target
-/// BinaryFunction for that symbol.
-static const BinaryFunction *setCSIDestination(const BinaryContext &BC,
-                                               yaml::bolt::CallSiteInfo &CSI,
-                                               const MCSymbol *Symbol) {
+const BinaryFunction *YAMLProfileWriter::setCSIDestination(
+    const BinaryContext &BC, yaml::bolt::CallSiteInfo &CSI,
+    const MCSymbol *Symbol, const BoltAddressTranslation *BAT,
+    uint32_t Offset) {
   CSI.DestId = 0; // designated for unknown functions
   CSI.EntryDiscriminator = 0;
+
   if (Symbol) {
     uint64_t EntryID = 0;
-    if (const BinaryFunction *const Callee =
+    if (const BinaryFunction *Callee =
             BC.getFunctionForSymbol(Symbol, &EntryID)) {
+      if (BAT && BAT->isBATFunction(Callee->getAddress()))
+        std::tie(Callee, EntryID) = BAT->translateSymbol(BC, *Symbol, Offset);
+      else if (const BinaryBasicBlock *BB =
+                   Callee->getBasicBlockContainingOffset(Offset))
+        BC.getFunctionForSymbol(Callee->getSecondaryEntryPointSymbol(*BB),
+                                &EntryID);
       CSI.DestId = Callee->getFunctionNumber();
       CSI.EntryDiscriminator = EntryID;
       return Callee;
@@ -45,9 +54,12 @@ static const BinaryFunction *setCSIDestination(const BinaryContext &BC,
 }
 
 yaml::bolt::BinaryFunctionProfile
-YAMLProfileWriter::convert(const BinaryFunction &BF, bool UseDFS) {
+YAMLProfileWriter::convert(const BinaryFunction &BF, bool UseDFS,
+                           const BoltAddressTranslation *BAT) {
   yaml::bolt::BinaryFunctionProfile YamlBF;
   const BinaryContext &BC = BF.getBinaryContext();
+  const MCPseudoProbeDecoder *PseudoProbeDecoder =
+      opts::ProfileUsePseudoProbes ? BC.getPseudoProbeDecoder() : nullptr;
 
   const uint16_t LBRProfile = BF.getProfileFlags() & BinaryFunction::PF_LBR;
 
@@ -55,15 +67,25 @@ YAMLProfileWriter::convert(const BinaryFunction &BF, bool UseDFS) {
   BF.computeHash(UseDFS);
   BF.computeBlockHashes();
 
-  YamlBF.Name = BF.getPrintName();
+  YamlBF.Name = DataAggregator::getLocationName(BF, BAT);
   YamlBF.Id = BF.getFunctionNumber();
   YamlBF.Hash = BF.getHash();
   YamlBF.NumBasicBlocks = BF.size();
   YamlBF.ExecCount = BF.getKnownExecutionCount();
+  if (PseudoProbeDecoder) {
+    if ((YamlBF.GUID = BF.getGUID())) {
+      const MCPseudoProbeFuncDesc *FuncDesc =
+          PseudoProbeDecoder->getFuncDescForGUID(YamlBF.GUID);
+      YamlBF.PseudoProbeDescHash = FuncDesc->FuncHash;
+    }
+  }
 
   BinaryFunction::BasicBlockOrderType Order;
   llvm::copy(UseDFS ? BF.dfs() : BF.getLayout().blocks(),
              std::back_inserter(Order));
+
+  const FunctionLayout Layout = BF.getLayout();
+  Layout.updateLayoutIndices(Order);
 
   for (const BinaryBasicBlock *BB : Order) {
     yaml::bolt::BinaryBasicBlockProfile YamlBB;
@@ -98,7 +120,8 @@ YAMLProfileWriter::convert(const BinaryFunction &BF, bool UseDFS) {
           continue;
         for (const IndirectCallProfile &CSP : ICSP.get()) {
           StringRef TargetName = "";
-          const BinaryFunction *Callee = setCSIDestination(BC, CSI, CSP.Symbol);
+          const BinaryFunction *Callee =
+              setCSIDestination(BC, CSI, CSP.Symbol, BAT);
           if (Callee)
             TargetName = Callee->getOneName();
           CSI.Count = CSP.Count;
@@ -109,7 +132,7 @@ YAMLProfileWriter::convert(const BinaryFunction &BF, bool UseDFS) {
         StringRef TargetName = "";
         const MCSymbol *CalleeSymbol = BC.MIB->getTargetSymbol(Instr);
         const BinaryFunction *const Callee =
-            setCSIDestination(BC, CSI, CalleeSymbol);
+            setCSIDestination(BC, CSI, CalleeSymbol, BAT);
         if (Callee)
           TargetName = Callee->getOneName();
 
@@ -162,6 +185,21 @@ YAMLProfileWriter::convert(const BinaryFunction &BF, bool UseDFS) {
       YamlBB.Successors.emplace_back(YamlSI);
 
       ++BranchInfo;
+    }
+
+    if (PseudoProbeDecoder) {
+      const AddressProbesMap &ProbeMap =
+          PseudoProbeDecoder->getAddress2ProbesMap();
+      const uint64_t FuncAddr = BF.getAddress();
+      const std::pair<uint64_t, uint64_t> &BlockRange =
+          BB->getInputAddressRange();
+      const auto &BlockProbes =
+          llvm::make_range(ProbeMap.lower_bound(FuncAddr + BlockRange.first),
+                           ProbeMap.lower_bound(FuncAddr + BlockRange.second));
+      for (const auto &[_, Probes] : BlockProbes)
+        for (const MCDecodedPseudoProbe &Probe : Probes)
+          YamlBB.PseudoProbes.emplace_back(yaml::bolt::PseudoProbeInfo{
+              Probe.getGuid(), Probe.getIndex(), Probe.getType()});
     }
 
     YamlBF.Blocks.emplace_back(YamlBB);

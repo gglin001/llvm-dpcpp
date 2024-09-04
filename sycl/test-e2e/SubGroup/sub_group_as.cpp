@@ -3,14 +3,12 @@
 //
 // RUN: %{build} -DUSE_DEPRECATED_LOCAL_ACC -o %t.out -Wno-deprecated-declarations
 // RUN: %{run} %t.out
-//
-// UNSUPPORTED: ze_debug
 
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <sycl/sycl.hpp>
+#include <sycl/detail/core.hpp>
 
 int main(int argc, char *argv[]) {
   sycl::queue queue;

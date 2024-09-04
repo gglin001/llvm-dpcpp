@@ -5,7 +5,6 @@ import platform
 import re
 import subprocess
 import tempfile
-from distutils.spawn import find_executable
 
 import lit.formats
 import lit.util
@@ -117,6 +116,7 @@ config.substitutions.append(("%cuda_toolkit_include", config.cuda_toolkit_includ
 config.substitutions.append(("%sycl_tools_src_dir", config.sycl_tools_src_dir))
 config.substitutions.append(("%llvm_build_lib_dir", config.llvm_build_lib_dir))
 config.substitutions.append(("%llvm_build_bin_dir", config.llvm_build_bin_dir))
+config.substitutions.append(("%test_include_path", config.test_include_path))
 
 llvm_symbolizer = os.path.join(config.llvm_build_bin_dir, "llvm-symbolizer")
 llvm_config.with_environment("LLVM_SYMBOLIZER_PATH", llvm_symbolizer)
@@ -177,6 +177,14 @@ if "amdgcn-amd-amdhsa" in triple:
             "-Xsycl-target-backend=amdgcn-amd-amdhsa",
             "--offload-arch=gfx906",
         ]
+
+config.sycl_headers_filter = lit_config.params.get("SYCL_HEADERS_FILTER", None)
+if config.sycl_headers_filter is not None:
+    lit_config.note(
+        "SYCL_HEADERS_FILTER param is set to '{}', it will impact amount of tests discovered within self-contained-headers sub-suite".format(
+            config.sycl_headers_filter
+        )
+    )
 
 # Dump-only tests do not have clang available
 if not dump_only_tests:

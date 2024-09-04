@@ -38,7 +38,6 @@
 // propagates the mapping to the uses of the kernel arguments.
 //
 //===----------------------------------------------------------------------===//
-#define DEBUG_TYPE "cltytospv"
 
 #include "OCLTypeToSPIRV.h"
 #include "OCLUtil.h"
@@ -49,6 +48,8 @@
 
 #include <iterator>
 #include <set>
+
+#define DEBUG_TYPE "cltytospv"
 
 using namespace llvm;
 using namespace SPIRV;
@@ -87,13 +88,7 @@ bool OCLTypeToSPIRVBase::runOCLTypeToSPIRV(Module &Module) {
   AdaptedTy.clear();
   WorkSet.clear();
   auto Src = getSPIRVSource(&Module);
-  // This is a pre-processing pass, which transform LLVM IR module to a more
-  // suitable form for the SPIR-V translation: it is specifically designed to
-  // handle OpenCL C/C++ and C++ for OpenCL types and shouldn't be launched for
-  // other source languages.
-  if (std::get<0>(Src) != spv::SourceLanguageOpenCL_C &&
-      std::get<0>(Src) != spv::SourceLanguageOpenCL_CPP &&
-      std::get<0>(Src) != spv::SourceLanguageCPP_for_OpenCL)
+  if (std::get<0>(Src) != spv::SourceLanguageOpenCL_C)
     return false;
 
   for (auto &F : Module.functions())
@@ -201,7 +196,12 @@ void OCLTypeToSPIRVBase::adaptArgumentsBySamplerUse(Module &M) {
     StringRef DemangledName;
     if (!oclIsBuiltin(MangledName, DemangledName, false))
       continue;
-    if (DemangledName.find(kSPIRVName::SampledImage) == std::string::npos)
+    // Note: kSPIRVName::ConvertHandleToSampledImageINTEL contains
+    // kSPIRVName::SampledImage as a substring, but we still want to continue in
+    // this case.
+    if (DemangledName.find(kSPIRVName::SampledImage) == std::string::npos ||
+        DemangledName.find(kSPIRVName::ConvertHandleToSampledImageINTEL) !=
+            std::string::npos)
       continue;
 
     TraceArg(&F, 1);

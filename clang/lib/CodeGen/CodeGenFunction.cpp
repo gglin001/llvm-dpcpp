@@ -93,6 +93,8 @@ CodeGenFunction::CodeGenFunction(CodeGenModule &cgm, bool suppressNewContext)
 
 CodeGenFunction::~CodeGenFunction() {
   assert(LifetimeExtendedCleanupStack.empty() && "failed to emit a cleanup");
+  assert(DeferredDeactivationCleanupStack.empty() &&
+         "missed to deactivate a cleanup");
 
   if (getLangOpts().OpenMP && CurFn)
     CGM.getOpenMPRuntime().functionFinished(*this);
@@ -195,26 +197,47 @@ CodeGenFunction::CGFPOptionsRAII::~CGFPOptionsRAII() {
   CGF.Builder.setDefaultConstrainedRounding(OldRounding);
 }
 
-LValue CodeGenFunction::MakeNaturalAlignAddrLValue(llvm::Value *V, QualType T) {
+static LValue
+makeNaturalAlignAddrLValue(llvm::Value *V, QualType T, bool ForPointeeType,
+                           bool MightBeSigned, CodeGenFunction &CGF,
+                           KnownNonNull_t IsKnownNonNull = NotKnownNonNull) {
   LValueBaseInfo BaseInfo;
   TBAAAccessInfo TBAAInfo;
-  CharUnits Alignment = CGM.getNaturalTypeAlignment(T, &BaseInfo, &TBAAInfo);
-  Address Addr(V, ConvertTypeForMem(T), Alignment);
-  return LValue::MakeAddr(Addr, T, getContext(), BaseInfo, TBAAInfo);
+  CharUnits Alignment =
+      CGF.CGM.getNaturalTypeAlignment(T, &BaseInfo, &TBAAInfo, ForPointeeType);
+  Address Addr =
+      MightBeSigned
+          ? CGF.makeNaturalAddressForPointer(V, T, Alignment, false, nullptr,
+                                             nullptr, IsKnownNonNull)
+          : Address(V, CGF.ConvertTypeForMem(T), Alignment, IsKnownNonNull);
+  return CGF.MakeAddrLValue(Addr, T, BaseInfo, TBAAInfo);
 }
 
-/// Given a value of type T* that may not be to a complete object,
-/// construct an l-value with the natural pointee alignment of T.
+LValue
+CodeGenFunction::MakeNaturalAlignAddrLValue(llvm::Value *V, QualType T,
+                                            KnownNonNull_t IsKnownNonNull) {
+  return ::makeNaturalAlignAddrLValue(V, T, /*ForPointeeType*/ false,
+                                      /*MightBeSigned*/ true, *this,
+                                      IsKnownNonNull);
+}
+
 LValue
 CodeGenFunction::MakeNaturalAlignPointeeAddrLValue(llvm::Value *V, QualType T) {
-  LValueBaseInfo BaseInfo;
-  TBAAAccessInfo TBAAInfo;
-  CharUnits Align = CGM.getNaturalTypeAlignment(T, &BaseInfo, &TBAAInfo,
-                                                /* forPointeeType= */ true);
-  Address Addr(V, ConvertTypeForMem(T), Align);
-  return MakeAddrLValue(Addr, T, BaseInfo, TBAAInfo);
+  return ::makeNaturalAlignAddrLValue(V, T, /*ForPointeeType*/ true,
+                                      /*MightBeSigned*/ true, *this);
 }
 
+LValue CodeGenFunction::MakeNaturalAlignRawAddrLValue(llvm::Value *V,
+                                                      QualType T) {
+  return ::makeNaturalAlignAddrLValue(V, T, /*ForPointeeType*/ false,
+                                      /*MightBeSigned*/ false, *this);
+}
+
+LValue CodeGenFunction::MakeNaturalAlignPointeeRawAddrLValue(llvm::Value *V,
+                                                             QualType T) {
+  return ::makeNaturalAlignAddrLValue(V, T, /*ForPointeeType*/ true,
+                                      /*MightBeSigned*/ false, *this);
+}
 
 llvm::Type *CodeGenFunction::ConvertTypeForMem(QualType T) {
   return CGM.getTypes().ConvertTypeForMem(T);
@@ -222,6 +245,11 @@ llvm::Type *CodeGenFunction::ConvertTypeForMem(QualType T) {
 
 llvm::Type *CodeGenFunction::ConvertType(QualType T) {
   return CGM.getTypes().ConvertType(T);
+}
+
+llvm::Type *CodeGenFunction::convertTypeForLoadStore(QualType ASTTy,
+                                                     llvm::Type *LLVMTy) {
+  return CGM.getTypes().convertTypeForLoadStore(ASTTy, LLVMTy);
 }
 
 TypeEvaluationKind CodeGenFunction::getEvaluationKind(QualType type) {
@@ -339,6 +367,16 @@ static void EmitIfUsed(CodeGenFunction &CGF, llvm::BasicBlock *BB) {
 void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
   assert(BreakContinueStack.empty() &&
          "mismatched push/pop in break/continue stack!");
+  assert(LifetimeExtendedCleanupStack.empty() &&
+         "mismatched push/pop of cleanups in EHStack!");
+  assert(DeferredDeactivationCleanupStack.empty() &&
+         "mismatched activate/deactivate of cleanups!");
+
+  if (CGM.shouldEmitConvergenceTokens()) {
+    ConvergenceTokenStack.pop_back();
+    assert(ConvergenceTokenStack.empty() &&
+           "mismatched push/pop in convergence stack!");
+  }
 
   bool OnlySimpleReturnStmts = NumSimpleReturnExprs > 0
     && NumSimpleReturnExprs == NumReturnExprs
@@ -528,7 +566,8 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
     ReturnBlock.getBlock()->eraseFromParent();
   }
   if (ReturnValue.isValid()) {
-    auto *RetAlloca = dyn_cast<llvm::AllocaInst>(ReturnValue.getPointer());
+    auto *RetAlloca =
+        dyn_cast<llvm::AllocaInst>(ReturnValue.emitRawPointer(*this));
     if (RetAlloca && RetAlloca->use_empty()) {
       RetAlloca->eraseFromParent();
       ReturnValue = Address::invalid();
@@ -648,6 +687,10 @@ void CodeGenFunction::EmitKernelMetadata(const FunctionDecl *FD,
     AttrMDArgs.push_back(
         llvm::ConstantAsMetadata::get(Builder.getInt(*XDimVal)));
 
+    for (auto i = AttrMDArgs.size(); i < 3; ++i)
+      AttrMDArgs.push_back(
+          llvm::ConstantAsMetadata::get(Builder.getInt(llvm::APInt(32, 1))));
+
     Fn->setMetadata("work_group_size_hint",
                     llvm::MDNode::get(Context, AttrMDArgs));
   }
@@ -668,16 +711,28 @@ void CodeGenFunction::EmitKernelMetadata(const FunctionDecl *FD,
     std::optional<llvm::APSInt> ZDimVal = A->getZDimVal();
     llvm::SmallVector<llvm::Metadata *, 3> AttrMDArgs;
 
+    llvm::APInt NumDims(32, 1); // X
     // On SYCL target the dimensions are reversed if present.
-    if (ZDimVal)
+    if (ZDimVal) {
       AttrMDArgs.push_back(
           llvm::ConstantAsMetadata::get(Builder.getInt(*ZDimVal)));
-    if (YDimVal)
+      ++NumDims;
+    }
+    if (YDimVal) {
       AttrMDArgs.push_back(
           llvm::ConstantAsMetadata::get(Builder.getInt(*YDimVal)));
+      ++NumDims;
+    }
     AttrMDArgs.push_back(
         llvm::ConstantAsMetadata::get(Builder.getInt(*XDimVal)));
 
+    for (auto i = NumDims.getZExtValue(); i < 3; ++i)
+      AttrMDArgs.push_back(
+          llvm::ConstantAsMetadata::get(Builder.getInt(llvm::APInt(32, 1))));
+
+    Fn->setMetadata("work_group_num_dim",
+                    llvm::MDNode::get(Context, llvm::ConstantAsMetadata::get(
+                                                   Builder.getInt(NumDims))));
     Fn->setMetadata("reqd_work_group_size",
                     llvm::MDNode::get(Context, AttrMDArgs));
   }
@@ -788,9 +843,9 @@ void CodeGenFunction::EmitKernelMetadata(const FunctionDecl *FD,
     // Attributes arguments (first and third) are reversed on SYCLDevice.
     if (getLangOpts().SYCLIsDevice) {
       llvm::Metadata *AttrMDArgs[] = {
-          llvm::ConstantAsMetadata::get(Builder.getInt(*A->getZDimVal())),
-          llvm::ConstantAsMetadata::get(Builder.getInt(*A->getYDimVal())),
-          llvm::ConstantAsMetadata::get(Builder.getInt(*A->getXDimVal()))};
+          llvm::ConstantAsMetadata::get(Builder.getInt32(A->getZDimVal())),
+          llvm::ConstantAsMetadata::get(Builder.getInt32(A->getYDimVal())),
+          llvm::ConstantAsMetadata::get(Builder.getInt32(A->getXDimVal()))};
       Fn->setMetadata("max_work_group_size",
                       llvm::MDNode::get(Context, AttrMDArgs));
     }
@@ -984,6 +1039,8 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
       Fn->addFnAttr(llvm::Attribute::SanitizeMemTag);
     if (SanOpts.has(SanitizerKind::Thread))
       Fn->addFnAttr(llvm::Attribute::SanitizeThread);
+    if (SanOpts.has(SanitizerKind::NumericalStability))
+      Fn->addFnAttr(llvm::Attribute::SanitizeNumericalStability);
     if (SanOpts.hasOneOf(SanitizerKind::Memory | SanitizerKind::KernelMemory))
       Fn->addFnAttr(llvm::Attribute::SanitizeMemory);
   }
@@ -1000,7 +1057,7 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
   // .cxx_destruct, __destroy_helper_block_ and all of their calees at run time.
   if (SanOpts.has(SanitizerKind::Thread)) {
     if (const auto *OMD = dyn_cast_or_null<ObjCMethodDecl>(D)) {
-      IdentifierInfo *II = OMD->getSelector().getIdentifierInfoForSlot(0);
+      const IdentifierInfo *II = OMD->getSelector().getIdentifierInfoForSlot(0);
       if (OMD->getMethodFamily() == OMF_dealloc ||
           OMD->getMethodFamily() == OMF_initialize ||
           (OMD->getSelector().isUnarySelector() && II->isStr(".cxx_destruct"))) {
@@ -1024,6 +1081,13 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
     if (FD && FD->getBody() &&
         FD->getBody()->getStmtClass() == Stmt::CoroutineBodyStmtClass)
       SanOpts.Mask &= ~SanitizerKind::Null;
+
+  // Add pointer authentication attributes.
+  const CodeGenOptions &CodeGenOpts = CGM.getCodeGenOpts();
+  if (CodeGenOpts.PointerAuth.FunctionPointers)
+    Fn->addFnAttr("ptrauth-calls");
+  if (CodeGenOpts.PointerAuth.IndirectGotos)
+    Fn->addFnAttr("ptrauth-indirect-gotos");
 
   // Apply xray attributes to the function (as a string, for now)
   bool AlwaysXRayAttr = false;
@@ -1131,6 +1195,9 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
   if (D && D->hasAttr<NoProfileFunctionAttr>())
     Fn->addFnAttr(llvm::Attribute::NoProfile);
 
+  if (D && D->hasAttr<HybridPatchableAttr>())
+    Fn->addFnAttr(llvm::Attribute::HybridPatchable);
+
   if (D) {
     // Function attributes take precedence over command line flags.
     if (auto *A = D->getAttr<FunctionReturnThunksAttr>()) {
@@ -1195,6 +1262,11 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
 
     if (getLangOpts().SYCLIsDevice)
       CGM.getSYCLRuntime().actOnFunctionStart(*FD, *Fn);
+  }
+
+  if (FD && FD->hasAttr<ClspvLibclcBuiltinAttr>()) {
+    Fn->setMetadata("clspv_libclc_builtin",
+                    llvm::MDNode::get(getLLVMContext(), {}));
   }
 
   // If we are checking function types, emit a function type signature as
@@ -1363,13 +1435,14 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
     auto AI = CurFn->arg_begin();
     if (CurFnInfo->getReturnInfo().isSRetAfterThis())
       ++AI;
-    ReturnValue =
-        Address(&*AI, ConvertType(RetTy),
-                CurFnInfo->getReturnInfo().getIndirectAlign(), KnownNonNull);
+    ReturnValue = makeNaturalAddressForPointer(
+        &*AI, RetTy, CurFnInfo->getReturnInfo().getIndirectAlign(), false,
+        nullptr, nullptr, KnownNonNull);
     if (!CurFnInfo->getReturnInfo().getIndirectByVal()) {
-      ReturnValuePointer = CreateDefaultAlignTempAlloca(
-          ReturnValue.getPointer()->getType(), "result.ptr");
-      Builder.CreateStore(ReturnValue.getPointer(), ReturnValuePointer);
+      ReturnValuePointer =
+          CreateDefaultAlignTempAlloca(ReturnValue.getType(), "result.ptr");
+      Builder.CreateStore(ReturnValue.emitRawPointer(*this),
+                          ReturnValuePointer);
     }
   } else if (CurFnInfo->getReturnInfo().getKind() == ABIArgInfo::InAlloca &&
              !hasScalarEvaluationKind(CurFnInfo->getReturnType())) {
@@ -1430,8 +1503,9 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
         // or contains the address of the enclosing object).
         LValue ThisFieldLValue = EmitLValueForLambdaField(LambdaThisCaptureField);
         if (!LambdaThisCaptureField->getType()->isPointerType()) {
-          // If the enclosing object was captured by value, just use its address.
-          CXXThisValue = ThisFieldLValue.getAddress(*this).getPointer();
+          // If the enclosing object was captured by value, just use its
+          // address. Sign this pointer.
+          CXXThisValue = ThisFieldLValue.getPointer(*this);
         } else {
           // Load the lvalue pointed to by the field, since '*this' was captured
           // by reference.
@@ -1498,6 +1572,9 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
   if (CurFuncDecl)
     if (const auto *VecWidth = CurFuncDecl->getAttr<MinVectorWidthAttr>())
       LargestVectorWidth = VecWidth->getVectorWidth();
+
+  if (CGM.shouldEmitConvergenceTokens())
+    ConvergenceTokenStack.push_back(getOrEmitConvergenceEntryToken(CurFn));
 }
 
 void CodeGenFunction::EmitFunctionBody(const Stmt *Body) {
@@ -1732,6 +1809,8 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
 
   // Ensure that the function adheres to the forward progress guarantee, which
   // is required by certain optimizations.
+  // In C++11 and up, the attribute will be removed if the body contains a
+  // trivial empty loop.
   if (checkIfFunctionMustProgress())
     CurFn->addFnAttr(llvm::Attribute::MustProgress);
 
@@ -2293,8 +2372,9 @@ static void emitNonZeroVLAInit(CodeGenFunction &CGF, QualType baseType,
     = llvm::ConstantInt::get(CGF.IntPtrTy, baseSize.getQuantity());
 
   Address begin = dest.withElementType(CGF.Int8Ty);
-  llvm::Value *end = Builder.CreateInBoundsGEP(
-      begin.getElementType(), begin.getPointer(), sizeInChars, "vla.end");
+  llvm::Value *end = Builder.CreateInBoundsGEP(begin.getElementType(),
+                                               begin.emitRawPointer(CGF),
+                                               sizeInChars, "vla.end");
 
   llvm::BasicBlock *originBB = CGF.Builder.GetInsertBlock();
   llvm::BasicBlock *loopBB = CGF.createBasicBlock("vla-init.loop");
@@ -2305,7 +2385,7 @@ static void emitNonZeroVLAInit(CodeGenFunction &CGF, QualType baseType,
   CGF.EmitBlock(loopBB);
 
   llvm::PHINode *cur = Builder.CreatePHI(begin.getType(), 2, "vla.cur");
-  cur->addIncoming(begin.getPointer(), originBB);
+  cur->addIncoming(begin.emitRawPointer(CGF), originBB);
 
   CharUnits curAlign =
     dest.getAlignment().alignmentOfArrayElement(baseSize);
@@ -2498,10 +2578,10 @@ llvm::Value *CodeGenFunction::emitArrayLength(const ArrayType *origArrayType,
     addr = addr.withElementType(baseType);
   } else {
     // Create the actual GEP.
-    addr = Address(Builder.CreateInBoundsGEP(
-        addr.getElementType(), addr.getPointer(), gepIndices, "array.begin"),
-        ConvertTypeForMem(eltType),
-        addr.getAlignment());
+    addr = Address(Builder.CreateInBoundsGEP(addr.getElementType(),
+                                             addr.emitRawPointer(*this),
+                                             gepIndices, "array.begin"),
+                   ConvertTypeForMem(eltType), addr.getAlignment());
   }
 
   baseType = eltType;
@@ -2722,11 +2802,11 @@ void CodeGenFunction::EmitVariablyModifiedType(QualType type) {
 Address CodeGenFunction::EmitVAListRef(const Expr* E) {
   if (getContext().getBuiltinVaListType()->isArrayType())
     return EmitPointerWithAlignment(E);
-  return EmitLValue(E).getAddress(*this);
+  return EmitLValue(E).getAddress();
 }
 
 Address CodeGenFunction::EmitMSVAListRef(const Expr *E) {
-  return EmitLValue(E).getAddress(*this);
+  return EmitLValue(E).getAddress();
 }
 
 void CodeGenFunction::EmitDeclRefExprDbgValue(const DeclRefExpr *E,
@@ -2850,7 +2930,7 @@ void CodeGenFunction::EmitVarAnnotations(const VarDecl *D, llvm::Value *V) {
 Address CodeGenFunction::EmitFieldAnnotations(const FieldDecl *D,
                                               Address Addr) {
   assert(D->hasAttr<AnnotateAttr>() && "no annotate attribute");
-  llvm::Value *V = Addr.getPointer();
+  llvm::Value *V = Addr.emitRawPointer(*this);
   llvm::Type *VTy = V->getType();
   auto *PTy = dyn_cast<llvm::PointerType>(VTy);
   unsigned AS = PTy ? PTy->getAddressSpace() : 0;
@@ -2909,7 +2989,7 @@ Address CodeGenFunction::EmitFieldSYCLAnnotations(const FieldDecl *D,
                                                   Address Addr) {
   const auto *SYCLAnnotAttr = D->getAttr<SYCLAddIRAnnotationsMemberAttr>();
   assert(SYCLAnnotAttr && "no add_ir_annotations_member attribute");
-  llvm::Value *V = Addr.getPointer();
+  llvm::Value *V = Addr.emitRawPointer(*this);
   llvm::Type *VTy = V->getType();
   auto *PTy = dyn_cast<llvm::PointerType>(VTy);
   unsigned AS = PTy ? PTy->getAddressSpace() : 0;
@@ -2936,7 +3016,7 @@ Address CodeGenFunction::EmitIntelFPGAFieldAnnotations(const FieldDecl *D,
 Address CodeGenFunction::EmitIntelFPGAFieldAnnotations(SourceLocation Location,
                                                        Address Addr,
                                                        StringRef AnnotStr) {
-  llvm::Value *V = Addr.getPointer();
+  llvm::Value *V = Addr.emitRawPointer(*this);
   llvm::Type *VTy = V->getType();
   // llvm.ptr.annotation intrinsic accepts a pointer to integer of any width -
   // don't perform bitcasts if value is integer
@@ -2973,7 +3053,6 @@ CodeGenFunction::SanitizerScope::~SanitizerScope() {
 
 void CodeGenFunction::InsertHelper(llvm::Instruction *I,
                                    const llvm::Twine &Name,
-                                   llvm::BasicBlock *BB,
                                    llvm::BasicBlock::iterator InsertPt) const {
   LoopStack.InsertHelper(I);
   if (IsSanitizerScope)
@@ -2981,11 +3060,11 @@ void CodeGenFunction::InsertHelper(llvm::Instruction *I,
 }
 
 void CGBuilderInserter::InsertHelper(
-    llvm::Instruction *I, const llvm::Twine &Name, llvm::BasicBlock *BB,
+    llvm::Instruction *I, const llvm::Twine &Name,
     llvm::BasicBlock::iterator InsertPt) const {
-  llvm::IRBuilderDefaultInserter::InsertHelper(I, Name, BB, InsertPt);
+  llvm::IRBuilderDefaultInserter::InsertHelper(I, Name, InsertPt);
   if (CGF)
-    CGF->InsertHelper(I, Name, BB, InsertPt);
+    CGF->InsertHelper(I, Name, InsertPt);
 }
 
 // Emits an error if we don't have a valid set of target features for the
@@ -3112,11 +3191,8 @@ void CodeGenFunction::EmitKCFIOperandBundle(
 llvm::Value *CodeGenFunction::FormAArch64ResolverCondition(
     const MultiVersionResolverOption &RO) {
   llvm::SmallVector<StringRef, 8> CondFeatures;
-  for (const StringRef &Feature : RO.Conditions.Features) {
-    // Form condition for features which are not yet enabled in target
-    if (!getContext().getTargetInfo().hasFeature(Feature))
-      CondFeatures.push_back(Feature);
-  }
+  for (const StringRef &Feature : RO.Conditions.Features)
+    CondFeatures.push_back(Feature);
   if (!CondFeatures.empty()) {
     return EmitAArch64CpuSupports(CondFeatures);
   }
@@ -3284,7 +3360,7 @@ void CodeGenFunction::emitAlignmentAssumptionCheck(
     SourceLocation SecondaryLoc, llvm::Value *Alignment,
     llvm::Value *OffsetValue, llvm::Value *TheCheck,
     llvm::Instruction *Assumption) {
-  assert(Assumption && isa<llvm::CallInst>(Assumption) &&
+  assert(isa_and_nonnull<llvm::CallInst>(Assumption) &&
          cast<llvm::CallInst>(Assumption)->getCalledOperand() ==
              llvm::Intrinsic::getDeclaration(
                  Builder.GetInsertBlock()->getParent()->getParent(),
@@ -3373,4 +3449,83 @@ llvm::Value *CodeGenFunction::emitBoolVecConversion(llvm::Value *SrcVec,
     ShuffleMask[MaskIdx] = MaskIdx;
 
   return Builder.CreateShuffleVector(SrcVec, ShuffleMask, Name);
+}
+
+void CodeGenFunction::EmitPointerAuthOperandBundle(
+    const CGPointerAuthInfo &PointerAuth,
+    SmallVectorImpl<llvm::OperandBundleDef> &Bundles) {
+  if (!PointerAuth.isSigned())
+    return;
+
+  auto *Key = Builder.getInt32(PointerAuth.getKey());
+
+  llvm::Value *Discriminator = PointerAuth.getDiscriminator();
+  if (!Discriminator)
+    Discriminator = Builder.getSize(0);
+
+  llvm::Value *Args[] = {Key, Discriminator};
+  Bundles.emplace_back("ptrauth", Args);
+}
+
+static llvm::Value *EmitPointerAuthCommon(CodeGenFunction &CGF,
+                                          const CGPointerAuthInfo &PointerAuth,
+                                          llvm::Value *Pointer,
+                                          unsigned IntrinsicID) {
+  if (!PointerAuth)
+    return Pointer;
+
+  auto Key = CGF.Builder.getInt32(PointerAuth.getKey());
+
+  llvm::Value *Discriminator = PointerAuth.getDiscriminator();
+  if (!Discriminator) {
+    Discriminator = CGF.Builder.getSize(0);
+  }
+
+  // Convert the pointer to intptr_t before signing it.
+  auto OrigType = Pointer->getType();
+  Pointer = CGF.Builder.CreatePtrToInt(Pointer, CGF.IntPtrTy);
+
+  // call i64 @llvm.ptrauth.sign.i64(i64 %pointer, i32 %key, i64 %discriminator)
+  auto Intrinsic = CGF.CGM.getIntrinsic(IntrinsicID);
+  Pointer = CGF.EmitRuntimeCall(Intrinsic, {Pointer, Key, Discriminator});
+
+  // Convert back to the original type.
+  Pointer = CGF.Builder.CreateIntToPtr(Pointer, OrigType);
+  return Pointer;
+}
+
+llvm::Value *
+CodeGenFunction::EmitPointerAuthSign(const CGPointerAuthInfo &PointerAuth,
+                                     llvm::Value *Pointer) {
+  if (!PointerAuth.shouldSign())
+    return Pointer;
+  return EmitPointerAuthCommon(*this, PointerAuth, Pointer,
+                               llvm::Intrinsic::ptrauth_sign);
+}
+
+static llvm::Value *EmitStrip(CodeGenFunction &CGF,
+                              const CGPointerAuthInfo &PointerAuth,
+                              llvm::Value *Pointer) {
+  auto StripIntrinsic = CGF.CGM.getIntrinsic(llvm::Intrinsic::ptrauth_strip);
+
+  auto Key = CGF.Builder.getInt32(PointerAuth.getKey());
+  // Convert the pointer to intptr_t before signing it.
+  auto OrigType = Pointer->getType();
+  Pointer = CGF.EmitRuntimeCall(
+      StripIntrinsic, {CGF.Builder.CreatePtrToInt(Pointer, CGF.IntPtrTy), Key});
+  return CGF.Builder.CreateIntToPtr(Pointer, OrigType);
+}
+
+llvm::Value *
+CodeGenFunction::EmitPointerAuthAuth(const CGPointerAuthInfo &PointerAuth,
+                                     llvm::Value *Pointer) {
+  if (PointerAuth.shouldStrip()) {
+    return EmitStrip(*this, PointerAuth, Pointer);
+  }
+  if (!PointerAuth.shouldAuth()) {
+    return Pointer;
+  }
+
+  return EmitPointerAuthCommon(*this, PointerAuth, Pointer,
+                               llvm::Intrinsic::ptrauth_auth);
 }

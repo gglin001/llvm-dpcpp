@@ -329,11 +329,9 @@ defm : X86WriteRes<WriteDPPSY,     [BWPort0,BWPort1,BWPort5], 14, [2,1,1], 4>;
 defm : X86WriteRes<WriteDPPSLd,    [BWPort0,BWPort1,BWPort5,BWPort06,BWPort23], 19, [2,1,1,1,1], 6>;
 defm : X86WriteRes<WriteDPPSYLd,   [BWPort0,BWPort1,BWPort5,BWPort06,BWPort23], 20, [2,1,1,1,1], 6>;
 defm : BWWriteResPair<WriteFSign,     [BWPort5], 1>; // Floating point fabs/fchs.
-defm : X86WriteRes<WriteFRnd,            [BWPort23],  6, [1],   1>; // Floating point rounding.
-defm : X86WriteRes<WriteFRndY,           [BWPort23],  6, [1],   1>; // Floating point rounding (YMM/ZMM).
+defm : BWWriteResPair<WriteFRnd,      [BWPort1], 6, [2], 2, 5>; // Floating point rounding.
+defm : BWWriteResPair<WriteFRndY,     [BWPort1], 6, [2], 2, 6>; // Floating point rounding (YMM/ZMM).
 defm : X86WriteResPairUnsupported<WriteFRndZ>;
-defm : X86WriteRes<WriteFRndLd,  [BWPort1,BWPort23], 11, [2,1], 3>;
-defm : X86WriteRes<WriteFRndYLd, [BWPort1,BWPort23], 12, [2,1], 3>;
 defm : BWWriteResPair<WriteFLogic,    [BWPort5], 1, [1], 1, 5>; // Floating point and/or/xor logicals.
 defm : BWWriteResPair<WriteFLogicY,   [BWPort5], 1, [1], 1, 6>; // Floating point and/or/xor logicals (YMM/ZMM).
 defm : X86WriteResPairUnsupported<WriteFLogicZ>;
@@ -794,10 +792,10 @@ def BWWriteResGroup28 : SchedWriteRes<[BWPort5]> {
 def: InstRW<[BWWriteResGroup28], (instrs VPBROADCASTBrr,
                                          VPBROADCASTWrr)>;
 
-def BWWriteResGroup33 : SchedWriteRes<[BWPort5,BWPort0156]> {
+def BWWriteResGroup33 : SchedWriteRes<[BWPort5]> {
   let Latency = 3;
-  let NumMicroOps = 3;
-  let ReleaseAtCycles = [2,1];
+  let NumMicroOps = 2;
+  let ReleaseAtCycles = [2];
 }
 def: InstRW<[BWWriteResGroup33], (instrs MMX_PACKSSDWrr,
                                          MMX_PACKSSWBrr,

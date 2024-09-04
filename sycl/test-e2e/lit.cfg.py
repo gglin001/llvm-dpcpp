@@ -5,9 +5,8 @@ import platform
 import copy
 import re
 import subprocess
-import tempfile
 import textwrap
-from distutils.spawn import find_executable
+import shutil
 
 import lit.formats
 import lit.util
@@ -58,6 +57,10 @@ possibly_dangerous_env_vars = [
     "LIBCLANG_RESOURCE_USAGE",
     "LIBCLANG_CODE_COMPLETION_LOGGING",
 ]
+
+# Names of the Release and Debug versions of the XPTIFW library
+XPTIFW_RELEASE = "xptifw"
+XPTIFW_DEBUG = "xptifwd"
 
 # Clang/Win32 may refer to %INCLUDE%. vsvarsall.bat sets it.
 if platform.system() != "Windows":
@@ -150,7 +153,6 @@ if lit_config.params.get("gpu-intel-dg1", False):
 if lit_config.params.get("gpu-intel-dg2", False):
     config.available_features.add("gpu-intel-dg2")
 if lit_config.params.get("gpu-intel-pvc", False):
-    config.available_features.add("gpu-intel-pvc")
     config.available_features.add(
         "matrix-fp16"
     )  # PVC implies the support of FP16 matrix
@@ -164,7 +166,7 @@ if lit_config.params.get("gpu-intel-pvc-vg", False):
     )  # PVC-VG implies the support of FP16 matrix
     config.available_features.add(
         "matrix-tf32"
-    )  # PVC-VG implies the support of TF32 matrix    
+    )  # PVC-VG implies the support of TF32 matrix
 if lit_config.params.get("matrix", False):
     config.available_features.add("matrix")
 
@@ -180,6 +182,18 @@ if lit_config.params.get("matrix-xmx8", False):
 if lit_config.params.get("matrix-fp16", False):
     config.available_features.add("matrix-fp16")
 
+
+def check_igc_tag_and_add_feature():
+    if os.path.isfile(config.igc_tag_file):
+        with open(config.igc_tag_file, "r") as tag_file:
+            contents = tag_file.read()
+            if "igc-dev" in contents:
+                config.available_features.add("igc-dev")
+
+
+# Call the function to perform the check and add the feature
+check_igc_tag_and_add_feature()
+
 # support for LIT parameter ur_l0_debug<num>
 if lit_config.params.get("ur_l0_debug"):
     config.ur_l0_debug = lit_config.params.get("ur_l0_debug")
@@ -192,10 +206,14 @@ if lit_config.params.get("ur_l0_leaks_debug"):
 
 if lit_config.params.get("enable-perf-tests", False):
     config.available_features.add("enable-perf-tests")
-# Make sure that any dynamic checks below are done in the build directory and
-# not where the sources are located. This is important for the in-tree
-# configuration (as opposite to the standalone one).
-os.chdir(config.sycl_obj_root)
+
+
+# Use this to make sure that any dynamic checks below are done in the build
+# directory and not where the sources are located. This is important for the
+# in-tree configuration (as opposite to the standalone one).
+def open_check_file(file_name):
+    return open(os.path.join(config.sycl_obj_root, file_name), "w")
+
 
 # check if compiler supports CL command line options
 cl_options = False
@@ -204,9 +222,21 @@ if sp[0] == 0:
     cl_options = True
     config.available_features.add("cl_options")
 
+# check if the compiler was built in NDEBUG configuration
+has_ndebug = False
+ps = subprocess.Popen(
+    [config.dpcpp_compiler, "-mllvm", "-debug", "-x", "c", "-", "-S", "-o", "-"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.PIPE,
+)
+_ = ps.communicate(input=b"int main(){}\n")
+if ps.wait() == 0:
+    config.available_features.add("has_ndebug")
+
 # Check for Level Zero SDK
 check_l0_file = "l0_include.cpp"
-with open(check_l0_file, "w") as fp:
+with open_check_file(check_l0_file) as fp:
     print(
         textwrap.dedent(
             """
@@ -256,7 +286,7 @@ else:
 
 # Check for sycl-preview library
 check_preview_breaking_changes_file = "preview_breaking_changes_link.cpp"
-with open(check_preview_breaking_changes_file, "w") as fp:
+with open_check_file(check_preview_breaking_changes_file) as fp:
     print(
         textwrap.dedent(
             """
@@ -280,7 +310,7 @@ if sp[0] == 0:
 
 # Check for CUDA SDK
 check_cuda_file = "cuda_include.cpp"
-with open(check_cuda_file, "w") as fp:
+with open_check_file(check_cuda_file) as fp:
     print(
         textwrap.dedent(
             """
@@ -377,6 +407,11 @@ else:
     )
     config.substitutions.append(("%shared_lib", "-shared"))
 
+# Check if user passed verbose-print parameter, if yes, add VERBOSE_PRINT macro
+if "verbose-print" in lit_config.params:
+    config.substitutions.append(("%verbose_print", "-DVERBOSE_PRINT"))
+else:
+    config.substitutions.append(("%verbose_print", ""))
 
 config.substitutions.append(("%vulkan_include_dir", config.vulkan_include_dir))
 config.substitutions.append(("%vulkan_lib", config.vulkan_lib))
@@ -418,6 +453,8 @@ if len(config.sycl_devices) == 1 and config.sycl_devices[0] == "all":
     )
     sp = subprocess.check_output(cmd, text=True, shell=True)
     for line in sp.splitlines():
+        if "Intel(R) Data Center GPU Max 1100" in line:
+            config.available_features.add("gpu-intel-pvc-1T")
         if "gfx90a" in line:
             config.available_features.add("gpu-amd-gfx90a")
         if not line.startswith("["):
@@ -458,7 +495,63 @@ if config.hip_platform not in supported_hip_platforms:
     )
 
 if "cuda:gpu" in config.sycl_devices:
+    if "CUDA_PATH" not in os.environ:
+        if platform.system() == "Windows":
+            cuda_root = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA"
+            cuda_versions = []
+            if os.path.exists(cuda_root):
+                for entry in os.listdir(cuda_root):
+                    if os.path.isdir(
+                        os.path.join(cuda_root, entry)
+                    ) and entry.startswith("v"):
+                        version = entry[1:]  # Remove the leading 'v'
+                        if re.match(
+                            r"^\d+\.\d+$", version
+                        ):  # Match version pattern like 12.3
+                            cuda_versions.append(version)
+                latest_cuda_version = max(
+                    cuda_versions, key=lambda v: [int(i) for i in v.split(".")]
+                )
+                os.environ["CUDA_PATH"] = os.path.join(
+                    cuda_root, f"v{latest_cuda_version}"
+                )
+        else:
+            cuda_root = "/usr/local"
+            cuda_versions = []
+            if os.path.exists(cuda_root):
+                for entry in os.listdir(cuda_root):
+                    if os.path.isdir(
+                        os.path.join(cuda_root, entry)
+                    ) and entry.startswith("cuda-"):
+                        version = entry.split("-")[1]
+                        if re.match(
+                            r"^\d+\.\d+$", version
+                        ):  # Match version pattern like 12.3
+                            cuda_versions.append(version)
+                if cuda_versions:
+                    latest_cuda_version = max(
+                        cuda_versions, key=lambda v: [int(i) for i in v.split(".")]
+                    )
+                    os.environ["CUDA_PATH"] = os.path.join(
+                        cuda_root, f"cuda-{latest_cuda_version}"
+                    )
+                elif os.path.exists(os.path.join(cuda_root, "cuda")):
+                    os.environ["CUDA_PATH"] = os.path.join(cuda_root, "cuda")
+
+    if "CUDA_PATH" not in os.environ:
+        lit_config.error("Cannot run tests for CUDA without valid CUDA_PATH.")
+
     llvm_config.with_system_environment("CUDA_PATH")
+    if platform.system() == "Windows":
+        config.cuda_libs_dir = (
+            '"' + os.path.join(os.environ["CUDA_PATH"], r"lib\x64") + '"'
+        )
+        config.cuda_include = (
+            '"' + os.path.join(os.environ["CUDA_PATH"], "include") + '"'
+        )
+    else:
+        config.cuda_libs_dir = os.path.join(os.environ["CUDA_PATH"], r"lib64")
+        config.cuda_include = os.path.join(os.environ["CUDA_PATH"], "include")
 
 # FIXME: This needs to be made per-device as well, possibly with a helper.
 if "hip:gpu" in config.sycl_devices and config.hip_platform == "AMD":
@@ -472,6 +565,9 @@ if "hip:gpu" in config.sycl_devices and config.hip_platform == "AMD":
     config.available_features.add("hip_amd")
     arch_flag = (
         "-Xsycl-target-backend=amdgcn-amd-amdhsa --offload-arch=" + config.amd_arch
+    )
+    config.substitutions.append(
+        ("%rocm_path", os.environ.get("ROCM_PATH", "/opt/rocm"))
     )
 elif "hip:gpu" in config.sycl_devices and config.hip_platform == "NVIDIA":
     config.available_features.add("hip_nvidia")
@@ -507,7 +603,13 @@ xptifw_dispatcher = ""
 if platform.system() == "Linux":
     xptifw_dispatcher = os.path.join(xptifw_lib_dir, "libxptifw.so")
 elif platform.system() == "Windows":
-    xptifw_dispatcher = os.path.join(config.dpcpp_root_dir, "bin", "xptifw.dll")
+    # Use debug version of xptifw library if tests are built with \MDd.
+    xptifw_dispatcher_name = (
+        XPTIFW_DEBUG if "/MDd" in config.cxx_flags else XPTIFW_RELEASE
+    )
+    xptifw_dispatcher = os.path.join(
+        config.dpcpp_root_dir, "bin", xptifw_dispatcher_name + ".dll"
+    )
 xptifw_includes = os.path.join(config.dpcpp_root_dir, "include")
 if os.path.exists(xptifw_lib_dir) and os.path.exists(
     os.path.join(xptifw_includes, "xpti", "xpti_trace_framework.h")
@@ -515,10 +617,15 @@ if os.path.exists(xptifw_lib_dir) and os.path.exists(
     config.available_features.add("xptifw")
     config.substitutions.append(("%xptifw_dispatcher", xptifw_dispatcher))
     if cl_options:
+        # Use debug version of xptifw library if tests are built with \MDd.
+        xptifw_lib_name = XPTIFW_DEBUG if "/MDd" in config.cxx_flags else XPTIFW_RELEASE
+        xptifw_lib = os.path.normpath(
+            os.path.join(xptifw_lib_dir, xptifw_lib_name + ".lib")
+        )
         config.substitutions.append(
             (
                 "%xptifw_lib",
-                " {}/xptifw.lib /I{} ".format(xptifw_lib_dir, xptifw_includes),
+                f" {xptifw_lib} /I{xptifw_includes} ",
             )
         )
     else:
@@ -558,7 +665,7 @@ for tool in feature_tools:
     else:
         lit_config.warning("Can't find " + tool.key)
 
-if find_executable("cmc"):
+if shutil.which("cmc") is not None:
     config.available_features.add("cm-compiler")
 
 # Device AOT compilation tools aren't part of the SYCL project,
@@ -566,7 +673,7 @@ if find_executable("cmc"):
 aot_tools = ["ocloc", "opencl-aot"]
 
 for aot_tool in aot_tools:
-    if find_executable(aot_tool) is not None:
+    if shutil.which(aot_tool) is not None:
         lit_config.note("Found pre-installed AOT device compiler " + aot_tool)
         config.available_features.add(aot_tool)
     else:
@@ -578,7 +685,7 @@ for aot_tool in aot_tools:
 # be ill-formed (compilation stops with non-zero exit code) if the feature
 # test macro for kernel fusion is not defined.
 check_fusion_file = "check_fusion.cpp"
-with open(check_fusion_file, "w") as ff:
+with open_check_file(check_fusion_file) as ff:
     ff.write("#include <sycl/sycl.hpp>\n")
     ff.write("#ifndef SYCL_EXT_CODEPLAY_KERNEL_FUSION\n")
     ff.write('#error "Feature test for fusion failed"\n')
@@ -629,6 +736,7 @@ for sycl_device in config.sycl_devices:
 
     dev_aspects = []
     dev_sg_sizes = []
+    architectures = set()
     # See format.py's parse_min_intel_driver_req for explanation.
     is_intel_driver = False
     intel_driver_ver = {}
@@ -653,6 +761,9 @@ for sycl_device in config.sycl_devices:
             # str.removeprefix isn't universally available...
             sg_sizes_str = line.strip().replace("info::device::sub_group_sizes: ", "")
             dev_sg_sizes.append(sg_sizes_str.strip().split(" "))
+        if re.match(r" *Architecture:", line):
+            _, architecture = line.strip().split(":", 1)
+            architectures.add(architecture.strip())
 
     if dev_aspects == []:
         lit_config.error(
@@ -678,11 +789,32 @@ for sycl_device in config.sycl_devices:
     sg_sizes = set(dev_sg_sizes[0]).intersection(*dev_sg_sizes)
     lit_config.note("SG sizes for {}: {}".format(sycl_device, ", ".join(sg_sizes)))
 
+    # Currently, for fpga, the architecture reported by sycl-ls will always
+    # be unknown, as there are currently no architectures specified for fpga
+    # in sycl_ext_oneapi_device_architecture. Skip adding architecture features
+    # in this case.
+    if sycl_device == "opencl:fpga":
+        architectures = set()
+    else:
+        lit_config.note(
+            "Architectures for {}: {}".format(sycl_device, ", ".join(architectures))
+        )
+        if len(architectures) != 1 or "unknown" in architectures:
+            if not config.allow_unknown_arch:
+                lit_config.error(
+                    "Cannot detect architecture for {}\nstdout:\n{}\nstderr:\n{}".format(
+                        sycl_device, sp.stdout, sp.stderr
+                    )
+                )
+            architectures = set()
+
     aspect_features = set("aspect-" + a for a in aspects)
     sg_size_features = set("sg-" + s for s in sg_sizes)
+    architecture_feature = set("arch-" + s for s in architectures)
     features = set()
     features.update(aspect_features)
     features.update(sg_size_features)
+    features.update(architecture_feature)
 
     be, dev = sycl_device.split(":")
     features.add(dev.replace("fpga", "accelerator"))
@@ -702,7 +834,3 @@ try:
     lit_config.maxIndividualTestTime = 600
 except ImportError:
     pass
-
-config.substitutions.append(
-    ("%device_sanitizer_flags", "-Xsycl-target-frontend -fsanitize=address")
-)

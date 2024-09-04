@@ -89,7 +89,14 @@ void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
 /// ConvertType in that it is used to convert to the memory representation for
 /// a type.  For example, the scalar representation for _Bool is i1, but the
 /// memory representation is usually i8 or i32, depending on the target.
-llvm::Type *CodeGenTypes::ConvertTypeForMem(QualType T, bool ForBitField) {
+///
+/// We generally assume that the alloc size of this type under the LLVM
+/// data layout is the same as the size of the AST type.  The alignment
+/// does not have to match: Clang should always use explicit alignments
+/// and packed structs as necessary to produce the layout it needs.
+/// But the size does need to be exactly right or else things like struct
+/// layout will break.
+llvm::Type *CodeGenTypes::ConvertTypeForMem(QualType T) {
   if (T->isConstantMatrixType()) {
     const Type *Ty = Context.getCanonicalType(T).getTypePtr();
     const ConstantMatrixType *MT = cast<ConstantMatrixType>(Ty);
@@ -107,15 +114,63 @@ llvm::Type *CodeGenTypes::ConvertTypeForMem(QualType T, bool ForBitField) {
     return llvm::IntegerType::get(FixedVT->getContext(), BytePadded);
   }
 
-  // If this is a bool type, or a bit-precise integer type in a bitfield
-  // representation, map this integer to the target-specified size.
-  if ((ForBitField && T->isBitIntType()) ||
-      (!T->isBitIntType() && R->isIntegerTy(1)))
+  // If T is _Bool or a _BitInt type, ConvertType will produce an IR type
+  // with the exact semantic bit-width of the AST type; for example,
+  // _BitInt(17) will turn into i17. In memory, however, we need to store
+  // such values extended to their full storage size as decided by AST
+  // layout; this is an ABI requirement. Ideally, we would always use an
+  // integer type that's just the bit-size of the AST type; for example, if
+  // sizeof(_BitInt(17)) == 4, _BitInt(17) would turn into i32. That is what's
+  // returned by convertTypeForLoadStore. However, that type does not
+  // always satisfy the size requirement on memory representation types
+  // describe above. For example, a 32-bit platform might reasonably set
+  // sizeof(_BitInt(65)) == 12, but i96 is likely to have to have an alloc size
+  // of 16 bytes in the LLVM data layout. In these cases, we simply return
+  // a byte array of the appropriate size.
+  if (T->isBitIntType()) {
+    if (typeRequiresSplitIntoByteArray(T, R))
+      return llvm::ArrayType::get(CGM.Int8Ty,
+                                  Context.getTypeSizeInChars(T).getQuantity());
+    return llvm::IntegerType::get(getLLVMContext(),
+                                  (unsigned)Context.getTypeSize(T));
+  }
+
+  if (R->isIntegerTy(1))
     return llvm::IntegerType::get(getLLVMContext(),
                                   (unsigned)Context.getTypeSize(T));
 
   // Else, don't map it.
   return R;
+}
+
+bool CodeGenTypes::typeRequiresSplitIntoByteArray(QualType ASTTy,
+                                                  llvm::Type *LLVMTy) {
+  if (!LLVMTy)
+    LLVMTy = ConvertType(ASTTy);
+
+  CharUnits ASTSize = Context.getTypeSizeInChars(ASTTy);
+  CharUnits LLVMSize =
+      CharUnits::fromQuantity(getDataLayout().getTypeAllocSize(LLVMTy));
+  return ASTSize != LLVMSize;
+}
+
+llvm::Type *CodeGenTypes::convertTypeForLoadStore(QualType T,
+                                                  llvm::Type *LLVMTy) {
+  if (!LLVMTy)
+    LLVMTy = ConvertType(T);
+
+  if (T->isBitIntType())
+    return llvm::Type::getIntNTy(
+        getLLVMContext(), Context.getTypeSizeInChars(T).getQuantity() * 8);
+
+  if (LLVMTy->isIntegerTy(1))
+    return llvm::IntegerType::get(getLLVMContext(),
+                                  (unsigned)Context.getTypeSize(T));
+
+  if (T->isExtVectorBoolType())
+    return ConvertTypeForMem(T);
+
+  return LLVMTy;
 }
 
 /// isRecordLayoutComplete - Return true if the specified type is already
@@ -320,6 +375,22 @@ llvm::Type *getJointMatrixINTELExtType(llvm::Type *CompTy,
                                   "spirv.JointMatrixINTEL", {CompTy}, Params);
 }
 
+llvm::Type *
+getCooperativeMatrixKHRExtType(llvm::Type *CompTy,
+                               ArrayRef<TemplateArgument> TemplateArgs) {
+  assert(TemplateArgs.size() == 5 &&
+         "Wrong CooperativeMatrixKHR template parameters number");
+  std::vector<unsigned> Params;
+  for (size_t I = 1; I != TemplateArgs.size(); ++I) {
+    assert(TemplateArgs[I].getKind() == TemplateArgument::Integral &&
+           "Wrong CooperativeMatrixKHR template parameter");
+    Params.push_back(TemplateArgs[I].getAsIntegral().getExtValue());
+  }
+
+  return llvm::TargetExtType::get(
+      CompTy->getContext(), "spirv.CooperativeMatrixKHR", {CompTy}, Params);
+}
+
 /// ConvertSYCLJointMatrixINTELType - Convert SYCL joint_matrix type
 /// which is represented as a pointer to a structure to LLVM extension type
 /// with the parameters that follow SPIR-V JointMatrixINTEL type.
@@ -361,6 +432,39 @@ llvm::Type *CodeGenTypes::ConvertSYCLJointMatrixINTELType(RecordDecl *RD) {
     }
   }
   return getJointMatrixINTELExtType(CompTy, TemplateArgs);
+}
+
+/// ConvertSPVCooperativeMatrixType - Convert SYCL joint_matrix type
+/// which is represented as a pointer to a structure to LLVM extension type
+/// with the parameters that follow SPIR-V CooperativeMatrixKHR type.
+/// The expected representation is:
+/// target("spirv.CooperativeMatrixKHR", %element_type, %scope%, %rows%, %cols%,
+///        %use%)
+llvm::Type *CodeGenTypes::ConvertSPVCooperativeMatrixType(RecordDecl *RD) {
+  auto *TemplateDecl = cast<ClassTemplateSpecializationDecl>(RD);
+  ArrayRef<TemplateArgument> TemplateArgs =
+      TemplateDecl->getTemplateArgs().asArray();
+  assert(TemplateArgs[0].getKind() == TemplateArgument::Type &&
+         "1st CooperativeMatrixKHR template parameter must be type");
+  llvm::Type *CompTy = ConvertType(TemplateArgs[0].getAsType());
+
+  if (CompTy->isStructTy()) {
+    StringRef LlvmTyName = CompTy->getStructName();
+    // Emit half/int16/float for sycl[::*]::{half,bfloat16,tf32}
+    if (LlvmTyName.starts_with("class.sycl::") ||
+        LlvmTyName.starts_with("class.__sycl_internal::"))
+      LlvmTyName = LlvmTyName.rsplit("::").second;
+    if (LlvmTyName == "half") {
+      CompTy = llvm::Type::getHalfTy(getLLVMContext());
+    } else if (LlvmTyName == "tf32") {
+      CompTy = llvm::Type::getFloatTy(getLLVMContext());
+    } else if (LlvmTyName == "bfloat16") {
+      CompTy = llvm::Type::getInt16Ty(getLLVMContext());
+    } else {
+      llvm_unreachable("Wrong matrix base type!");
+    }
+  }
+  return getCooperativeMatrixKHRExtType(CompTy, TemplateArgs);
 }
 
 /// ConvertType - Convert the specified type to its LLVM form.
@@ -486,7 +590,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
       break;
     case BuiltinType::LongDouble:
       LongDoubleReferenced = true;
-      LLVM_FALLTHROUGH;
+      [[fallthrough]];
     case BuiltinType::BFloat16:
     case BuiltinType::Float:
     case BuiltinType::Double:
@@ -605,8 +709,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
           return llvm::StructType::get(getLLVMContext(), EltTys);
         }
         return llvm::ScalableVectorType::get(ConvertType(Info.ElementType),
-                                             Info.EC.getKnownMinValue() *
-                                                 Info.NumVectors);
+                                             Info.EC.getKnownMinValue());
       }
 #define WASM_REF_TYPE(Name, MangledName, Id, SingletonId, AS)                  \
   case BuiltinType::Id: {                                                      \
@@ -616,6 +719,11 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
       llvm_unreachable("Unexpected wasm reference builtin type!");             \
   } break;
 #include "clang/Basic/WebAssemblyReferenceTypes.def"
+#define AMDGPU_OPAQUE_PTR_TYPE(Name, MangledName, AS, Width, Align, Id,        \
+                               SingletonId)                                    \
+  case BuiltinType::Id:                                                        \
+    return llvm::PointerType::get(getLLVMContext(), AS);
+#include "clang/Basic/AMDGPUTypes.def"
     case BuiltinType::Dependent:
 #define BUILTIN_TYPE(Id, SingletonId)
 #define PLACEHOLDER_TYPE(Id, SingletonId) \
@@ -653,6 +761,10 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
         if (RD && RD->getQualifiedNameAsString() ==
                       "__spv::__spirv_JointMatrixINTEL") {
           ResultType = ConvertSYCLJointMatrixINTELType(RD);
+          break;
+        } else if (RD && RD->getQualifiedNameAsString() ==
+                             "__spv::__spirv_CooperativeMatrixKHR") {
+          ResultType = ConvertSPVCooperativeMatrixType(RD);
           break;
         } else if (RD && RD->getQualifiedNameAsString() ==
                              "__spv::__spirv_TaskSequenceINTEL") {

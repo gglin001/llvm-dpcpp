@@ -368,6 +368,7 @@ add_custom_target(sycl-compiler
           llvm-spirv
           llvm-link
           llvm-objcopy
+          llvm-dis
           spirv-to-ir-wrapper
           sycl-post-link
           opencl-aot

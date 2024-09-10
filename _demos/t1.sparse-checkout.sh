@@ -8,6 +8,14 @@ git sparse-checkout set --no-cone \
   /xpti /xptifw \
   /_demos '/*.*'
 
+# optional
+git sparse-checkout add \
+  '!/llvm/test' '!/clang/test'
+
+# optional
+git sparse-checkout add \
+  '/lld' '/libunwind'
+
 git sparse-checkout list
 git checkout
 popd

@@ -18,7 +18,7 @@ args=(
 )
 python "${args[@]}"
 
-python buildbot/compile.py
+python buildbot/compile.py -t sycl-toolchain
 
 ###############################################################################
 
@@ -36,7 +36,7 @@ args=(
 )
 python "${args[@]}"
 
-python buildbot/compile.py
+python buildbot/compile.py -t sycl-toolchain
 
 ###############################################################################
 
@@ -55,7 +55,7 @@ args=(
 )
 python "${args[@]}"
 
-python buildbot/compile.py
+python buildbot/compile.py -t sycl-toolchain
 
 ###############################################################################
 
@@ -74,6 +74,6 @@ args=(
 )
 python "${args[@]}"
 
-python buildbot/compile.py
+python buildbot/compile.py -t sycl-toolchain
 
 ###############################################################################

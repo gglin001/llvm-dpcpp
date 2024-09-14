@@ -22,6 +22,22 @@ python buildbot/compile.py -t sycl-toolchain
 
 ###############################################################################
 
+args=(
+  buildbot/configure.py
+  --use-lld
+  --host-target="host;RISCV;AArch64"
+  --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_osx"
+  --cmake-opt="-DLLVM_INCLUDE_TESTS=OFF"
+  --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
+  --cmake-opt="-DNATIVECPU_USE_OCK=OFF"
+  --cmake-opt="-DSYCL_ENABLE_BACKENDS=\"opencl\""
+)
+python "${args[@]}"
+
+python buildbot/compile.py -t sycl-toolchain
+
+###############################################################################
+
 # NATIVECPU_USE_OCK=ON
 
 args=(

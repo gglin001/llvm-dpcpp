@@ -685,7 +685,8 @@ struct Wrapper {
     auto *FuncTy = FunctionType::get(Type::getVoidTy(C), /*isVarArg*/ false);
     auto *Func = Function::Create(FuncTy, GlobalValue::InternalLinkage,
                                   Twine("sycl") + ".descriptor_reg", &M);
-    Func->setSection(".text.startup");
+    // Func->setSection(".text.startup");
+    Func->setSection("__TEXT,__StaticInit,regular,pure_instructions");
 
     // Get RegFuncName function declaration.
     auto *RegFuncTy =
@@ -707,7 +708,8 @@ struct Wrapper {
     auto *FuncTy = FunctionType::get(Type::getVoidTy(C), /*isVarArg*/ false);
     auto *Func = Function::Create(FuncTy, GlobalValue::InternalLinkage,
                                   "sycl.descriptor_unreg", &M);
-    Func->setSection(".text.startup");
+    // Func->setSection(".text.startup");
+    Func->setSection("__TEXT,__StaticInit,regular,pure_instructions");
 
     // Get UnregFuncName function declaration.
     auto *UnRegFuncTy =

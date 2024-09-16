@@ -492,6 +492,7 @@ using builtin_enable_nan_t = std::enable_if_t<
 } // namespace detail
 
 #ifdef __SYCL_DEVICE_ONLY__
+#if 0
 inline float nan(uint32_t x) {
   return __spirv_ocl_nan(detail::builtins::convert_arg(x));
 }
@@ -502,6 +503,7 @@ inline half nan(uint16_t x) {
   return __spirv_ocl_nan(detail::builtins::convert_arg(x));
 }
 DEVICE_IMPL_TEMPLATE(ONE_ARG, nan, builtin_enable_nan_t, __spirv_ocl_nan)
+#endif
 #else
 inline float nan(uint32_t) { return std::numeric_limits<float>::quiet_NaN(); }
 inline double nan(uint64_t) { return std::numeric_limits<float>::quiet_NaN(); }

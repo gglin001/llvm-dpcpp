@@ -737,9 +737,10 @@ private:
     return addArrayToModule(Buf, Name,
                             TargetTriple.empty()
                                 ? ""
-                                : "__CLANG_OFFLOAD_BUNDLE__" +
-                                      offloadKindToString(Kind) + "-" +
-                                      TargetTriple);
+                                : "__TEXT,__cstring,cstring_literals");
+                                // : "__CLANG_OFFLOAD_BUNDLE__" +
+                                //       offloadKindToString(Kind) + "-" +
+                                //       TargetTriple);
   }
 
   // Creates a global variable of const char* type and creates an
@@ -1123,7 +1124,8 @@ private:
         ImgInfoVar->setAlignment(
             MaybeAlign(M.getDataLayout().getTypeStoreSize(IntPtrTy) * 2u));
         ImgInfoVar->setUnnamedAddr(GlobalValue::UnnamedAddr::Local);
-        ImgInfoVar->setSection(".tgtimg");
+        // ImgInfoVar->setSection(".tgtimg");
+        ImgInfoVar->setSection("__TEXT,__cstring,cstring_literals");
 
         // Add image info to the used list to force it to be emitted to the
         // object.
@@ -1183,7 +1185,8 @@ private:
     auto *Func =
         Function::Create(FuncTy, GlobalValue::InternalLinkage,
                          offloadKindToString(Kind) + ".descriptor_reg", &M);
-    Func->setSection(".text.startup");
+    // Func->setSection(".text.startup");
+    Func->setSection("__TEXT,__StaticInit,regular,pure_instructions");
 
     // Get RegFuncName function declaration.
     auto *RegFuncTy = FunctionType::get(
@@ -1214,7 +1217,8 @@ private:
     auto *Func =
         Function::Create(FuncTy, GlobalValue::InternalLinkage,
                          offloadKindToString(Kind) + ".descriptor_unreg", &M);
-    Func->setSection(".text.startup");
+    // Func->setSection(".text.startup");
+    Func->setSection("__TEXT,__StaticInit,regular,pure_instructions");
 
     // Get UnregFuncName function declaration.
     auto *UnRegFuncTy = FunctionType::get(

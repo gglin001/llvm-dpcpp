@@ -117,13 +117,13 @@ if(SYCL_UR_USE_FETCH_CONTENT)
   endfunction()
 
   set(UNIFIED_RUNTIME_REPO "https://github.com/oneapi-src/unified-runtime.git")
-  # commit f31160dea6d142014f441bc4ca5e58e48827490e
-  # Merge: 2bbe9526 64068799
+  # commit 7a2caca559da81620c7430521873045bf42eafc1
+  # Merge: 1d1808a4 96f66e0f
   # Author: Piotr Balcer <piotr.balcer@intel.com>
-  # Date:   Thu Sep 12 14:19:48 2024 +0200
-  #     Merge pull request #2083 from kswiecicki/xpti-init-fix
-  #     Fix XPTI initialization bug
-  set(UNIFIED_RUNTIME_TAG f31160dea6d142014f441bc4ca5e58e48827490e)
+  # Date:   Tue Sep 24 13:00:46 2024 +0200
+  #     Merge pull request #2117 from pbalcer/fix-filter-out-same-cmdlists
+  #     Fix urEnqueueEventsWaitWithBarrier when used with interop events
+  set(UNIFIED_RUNTIME_TAG 7a2caca559da81620c7430521873045bf42eafc1)
 
   set(UMF_BUILD_EXAMPLES OFF CACHE INTERNAL "EXAMPLES")
   # Due to the use of dependentloadflag and no installer for UMF and hwloc we need

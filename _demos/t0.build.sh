@@ -1,7 +1,9 @@
 ###############################################################################
 
 # build all
-cmake --build build --target all
+# cmake --build build --target all
+python buildbot/compile.py -t all
+python buildbot/compile.py -t install
 
 ###############################################################################
 

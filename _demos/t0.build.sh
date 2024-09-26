@@ -100,15 +100,20 @@ args=(
   --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
   --cmake-opt="-DNATIVECPU_USE_OCK=OFF"
   --cmake-opt="-DSYCL_ENABLE_BACKENDS=opencl"
-  --llvm-external-projects="lld"
   --build-type=Debug
   --obj-dir=build_debug
 )
 python "${args[@]}"
 
-# build sycl-toolchain
-python buildbot/compile.py --obj-dir build_debug -t sycl-toolchain
-cmake --build build_debug --target all
+# only libsycl.so for debug
+cmake --build build_debug --target libsycl.so
+# deps:
+# libur_loader.so
+# libur_adapter_opencl.so
+# libumf.so
+
+# python buildbot/compile.py --obj-dir build_debug -t sycl-toolchain
+# cmake --build build_debug --target all
 # cmake --build build_debug --target install
 
 ###############################################################################

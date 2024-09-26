@@ -4,6 +4,9 @@
 python buildbot/compile.py -t sycl-toolchain
 # python buildbot/compile.py -t install-sycl-toolchain
 
+# list targets
+cmake --build build_debug --target help
+
 # build all
 cmake --build build --target all
 # optional install

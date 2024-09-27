@@ -47,6 +47,7 @@ args=(
   --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
   --cmake-opt="-DNATIVECPU_USE_OCK=OFF"
   --cmake-opt="-DSYCL_ENABLE_BACKENDS=opencl"
+  --llvm-external-projects="lld"
 )
 python "${args[@]}"
 

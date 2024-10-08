@@ -117,14 +117,13 @@ if(SYCL_UR_USE_FETCH_CONTENT)
   endfunction()
 
   set(UNIFIED_RUNTIME_REPO "https://github.com/oneapi-src/unified-runtime.git")
-  # commit 2ad32681efd2c977f2c1f7f3a30d572d4c15499c
-  # Author: Hugh Delaney <hugh.delaney@codeplay.com>
-  # Date:   Wed Sep 25 15:55:05 2024 +0100
-  #     Associate queue with device in context (#1992)
-  #     Making a native queue doesn't require hDevice to be non null, but this
-  #     associates the queue with a null device, even if hContext contains valid
-  #     devices.
-  set(UNIFIED_RUNTIME_TAG 2ad32681efd2c977f2c1f7f3a30d572d4c15499c)
+  # commit 7907998a442b381a6669d2ae5ab957f8ddda5d03
+  # Merge: 7e9d9d47 ae7f58e3
+  # Author: aarongreig <aaron.greig@codeplay.com>
+  # Date:   Fri Oct 4 11:35:10 2024 +0100
+  #     Merge pull request #2121 from nrspruit/error_after_free_syclos
+  #     [L0] Refcnt Parent Buffer on Sub Buffer Create and die on use of buffer after free
+  set(UNIFIED_RUNTIME_TAG 7907998a442b381a6669d2ae5ab957f8ddda5d03)
 
   set(UMF_BUILD_EXAMPLES OFF CACHE INTERNAL "EXAMPLES")
   # Due to the use of dependentloadflag and no installer for UMF and hwloc we need

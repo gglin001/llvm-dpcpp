@@ -17,19 +17,19 @@ cmake --build build --target install
 # OSX
 # NATIVECPU_USE_OCK=ON
 
-args=(
-  buildbot/configure.py
-  --use-lld
-  --native_cpu
-  --host-target="host;RISCV;AArch64"
-  --cmake-opt="-DCMAKE_C_COMPILER=/usr/bin/clang"
-  --cmake-opt="-DCMAKE_CXX_COMPILER=/usr/bin/clang++"
-  --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_osx"
-  --cmake-opt="-DLLVM_INCLUDE_TESTS=OFF"
-  --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
-  --cmake-opt="-DNATIVECPU_USE_OCK=ON"
-)
-python "${args[@]}"
+# args=(
+#   buildbot/configure.py
+#   --use-lld
+#   --native_cpu
+#   --host-target="host;RISCV;AArch64"
+#   --cmake-opt="-DCMAKE_C_COMPILER=/usr/bin/clang"
+#   --cmake-opt="-DCMAKE_CXX_COMPILER=/usr/bin/clang++"
+#   --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_osx"
+#   --cmake-opt="-DLLVM_INCLUDE_TESTS=OFF"
+#   --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
+#   --cmake-opt="-DNATIVECPU_USE_OCK=ON"
+# )
+# python "${args[@]}"
 
 ###############################################################################
 
@@ -55,19 +55,19 @@ python "${args[@]}"
 
 # NATIVECPU_USE_OCK=ON
 
-args=(
-  buildbot/configure.py
-  --use-lld
-  --native_cpu
-  --host-target="host;RISCV;AArch64"
-  --cmake-opt="-DCMAKE_C_COMPILER=/usr/bin/clang"
-  --cmake-opt="-DCMAKE_CXX_COMPILER=/usr/bin/clang++"
-  --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_linux"
-  --cmake-opt="-DLLVM_INCLUDE_TESTS=OFF"
-  --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
-  --cmake-opt="-DNATIVECPU_USE_OCK=ON"
-)
-python "${args[@]}"
+# args=(
+#   buildbot/configure.py
+#   --use-lld
+#   --native_cpu
+#   --host-target="host;RISCV;AArch64"
+#   --cmake-opt="-DCMAKE_C_COMPILER=/usr/bin/clang"
+#   --cmake-opt="-DCMAKE_CXX_COMPILER=/usr/bin/clang++"
+#   --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_linux"
+#   --cmake-opt="-DLLVM_INCLUDE_TESTS=OFF"
+#   --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
+#   --cmake-opt="-DNATIVECPU_USE_OCK=ON"
+# )
+# python "${args[@]}"
 
 ###############################################################################
 
@@ -76,7 +76,7 @@ python "${args[@]}"
 args=(
   buildbot/configure.py
   --use-lld
-  --host-target="host;RISCV;AArch64"
+  --host-target="host;RISCV;AArch64;NVPTX;AMDGPU"
   --cmake-opt="-DCMAKE_C_COMPILER=/usr/bin/clang"
   --cmake-opt="-DCMAKE_CXX_COMPILER=/usr/bin/clang++"
   --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_linux"
@@ -84,7 +84,7 @@ args=(
   --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
   --cmake-opt="-DNATIVECPU_USE_OCK=OFF"
   --cmake-opt="-DSYCL_ENABLE_BACKENDS=opencl"
-  --llvm-external-projects="lld"
+  --llvm-external-projects="lld;mlir"
 )
 python "${args[@]}"
 

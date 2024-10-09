@@ -70,18 +70,18 @@ endforeach()
 # library.
 # Additional compilation options are needed for compiling each device library.
 set(devicelib_arch)
-if ("NVPTX" IN_LIST LLVM_TARGETS_TO_BUILD)
-  list(APPEND devicelib_arch cuda)
-  set(compile_opts_cuda "-fsycl-targets=nvptx64-nvidia-cuda"
-  "-Xsycl-target-backend" "--cuda-gpu-arch=sm_50" "-nocudalib")
-  set(opt_flags_cuda "-O3" "--nvvm-reflect-enable=false")
-endif()
-if("AMDGPU" IN_LIST LLVM_TARGETS_TO_BUILD)
-  list(APPEND devicelib_arch amd)
-  set(compile_opts_amd "-nogpulib" "-fsycl-targets=amdgcn-amd-amdhsa"
-  "-Xsycl-target-backend" "--offload-arch=gfx940")
-  set(opt_flags_amd "-O3" "--amdgpu-oclc-reflect-enable=false")
-endif()
+# if ("NVPTX" IN_LIST LLVM_TARGETS_TO_BUILD)
+#   list(APPEND devicelib_arch cuda)
+#   set(compile_opts_cuda "-fsycl-targets=nvptx64-nvidia-cuda"
+#   "-Xsycl-target-backend" "--cuda-gpu-arch=sm_50" "-nocudalib")
+#   set(opt_flags_cuda "-O3" "--nvvm-reflect-enable=false")
+# endif()
+# if("AMDGPU" IN_LIST LLVM_TARGETS_TO_BUILD)
+#   list(APPEND devicelib_arch amd)
+#   set(compile_opts_amd "-nogpulib" "-fsycl-targets=amdgcn-amd-amdhsa"
+#   "-Xsycl-target-backend" "--offload-arch=gfx940")
+#   set(opt_flags_amd "-O3" "--amdgpu-oclc-reflect-enable=false")
+# endif()
 
 
 set(spv_device_compile_opts -fsycl-device-only -fsycl-device-obj=spirv)

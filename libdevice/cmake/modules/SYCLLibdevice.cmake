@@ -22,10 +22,12 @@ set(install_dest_obj lib${LLVM_LIBDIR_SUFFIX})
 set(install_dest_obj-new-offload lib${LLVM_LIBDIR_SUFFIX})
 set(install_dest_bc lib${LLVM_LIBDIR_SUFFIX})
 
-set(clang $<TARGET_FILE:clang>)
-set(llvm-ar $<TARGET_FILE:llvm-ar>)
-set(llvm-link $<TARGET_FILE:llvm-link>)
-set(llvm-opt $<TARGET_FILE:opt>)
+# set(clang $<TARGET_FILE:clang>)
+# set(llvm-ar $<TARGET_FILE:llvm-ar>)
+# set(llvm-link $<TARGET_FILE:llvm-link>)
+# set(llvm-opt $<TARGET_FILE:opt>)
+set(clang ${CMAKE_CXX_COMPILER})
+set(llvm-ar ${CMAKE_AR})
 
 string(CONCAT sycl_targets_opt
   "-fsycl-targets="
@@ -35,6 +37,11 @@ string(CONCAT sycl_targets_opt
   "spir64-unknown-unknown,"
   "spirv64-unknown-unknown")
 
+# if(NOT LIBDEVICE_EXTRA_COMPILE_OPTS)
+#   message(FATAL_ERROR "expect option `LIBDEVICE_EXTRA_COMPILE_OPTS`, eg: `-target aarch64-unknown-linux-gnu --sysroot aarch64-unknown-linux-gnu`")
+# endif()
+separate_arguments(LIBDEVICE_EXTRA_COMPILE_OPTS)
+
 set(compile_opts
   # suppress an error about SYCL_EXTERNAL being used for
   # a function with a raw pointer parameter.
@@ -43,6 +50,7 @@ set(compile_opts
   # we declare all functions as 'static'.
   -Wno-undefined-internal
   -sycl-std=2020
+  ${LIBDEVICE_EXTRA_COMPILE_OPTS}
   )
 
 set(SYCL_LIBDEVICE_GCC_TOOLCHAIN "" CACHE PATH "Path to GCC installation")
@@ -326,6 +334,7 @@ set(imf_bf16_fallback_src ${imf_fallback_src_dir}/imf_bf16_fallback.cpp)
 
 set(imf_host_cxx_flags -c
   -D__LIBDEVICE_HOST_IMPL__
+  ${LIBDEVICE_EXTRA_COMPILE_OPTS}
 )
 
 macro(mangle_name str output)

@@ -356,27 +356,28 @@ if (SYCL_ENABLE_XPTI_TRACING)
 endif()
 
 # SYCL toolchain builds all components: compiler, libraries, headers, etc.
-add_custom_target(sycl-compiler
-  DEPENDS append-file
-          clang
-          clang-offload-wrapper
-          clang-offload-bundler
-          clang-offload-deps
-          clang-offload-extract
-          clang-offload-packager
-          clang-linker-wrapper
-          file-table-tform
-          llc
-          llvm-ar
-          llvm-foreach
-          llvm-spirv
-          llvm-link
-          llvm-objcopy
-          llvm-dis
-          spirv-to-ir-wrapper
-          sycl-post-link
-          opencl-aot
-)
+add_custom_target(sycl-compiler)
+# add_custom_target(sycl-compiler
+#   DEPENDS append-file
+#           clang
+#           clang-offload-wrapper
+#           clang-offload-bundler
+#           clang-offload-deps
+#           clang-offload-extract
+#           clang-offload-packager
+#           clang-linker-wrapper
+#           file-table-tform
+#           llc
+#           llvm-ar
+#           llvm-foreach
+#           llvm-spirv
+#           llvm-link
+#           llvm-objcopy
+#           llvm-dis
+#           spirv-to-ir-wrapper
+#           sycl-post-link
+#           opencl-aot
+# )
 
 add_custom_target( sycl-runtime-libraries
   DEPENDS ${SYCL_RT_LIBS}
@@ -436,27 +437,27 @@ get_property(SYCL_TOOLCHAIN_DEPS GLOBAL PROPERTY SYCL_TOOLCHAIN_INSTALL_COMPONEN
 # Package deploy support
 # Listed here are component names contributing the package
 set( SYCL_TOOLCHAIN_DEPLOY_COMPONENTS
-     append-file
-     boost_mp11-headers
-     clang
-     clang-offload-wrapper
-     clang-offload-bundler
-     clang-offload-deps
-     clang-offload-extract
-     clang-offload-packager
-     clang-linker-wrapper
-     file-table-tform
-     llc
-     llvm-ar
-     llvm-foreach
-     llvm-spirv
-     llvm-link
-     llvm-objcopy
-     llvm-dis
-     spirv-to-ir-wrapper
-     sycl-post-link
-     sycl-ls
-     clang-resource-headers
+    #  append-file
+    #  boost_mp11-headers
+    #  clang
+    #  clang-offload-wrapper
+    #  clang-offload-bundler
+    #  clang-offload-deps
+    #  clang-offload-extract
+    #  clang-offload-packager
+    #  clang-linker-wrapper
+    #  file-table-tform
+    #  llc
+    #  llvm-ar
+    #  llvm-foreach
+    #  llvm-spirv
+    #  llvm-link
+    #  llvm-objcopy
+    #  llvm-dis
+    #  spirv-to-ir-wrapper
+    #  sycl-post-link
+    #  sycl-ls
+    #  clang-resource-headers
      OpenCL-Headers
      opencl-aot
      sycl-headers

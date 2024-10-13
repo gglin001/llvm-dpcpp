@@ -28,7 +28,7 @@
         "LLVM_ENABLE_IDE": true,
         "LLVM_TARGETS_TO_BUILD": "AArch64",
         "LLVM_DEFAULT_TARGET_TRIPLE": "aarch64-unknown-linux-gnu",
-        "LLVM_EXTERNAL_PROJECTS": "sycl;llvm-spirv;opencl;xpti;xptifw;sycl-jit;lld",
+        "LLVM_EXTERNAL_PROJECTS": "sycl;llvm-spirv;opencl;xpti;xptifw;libdevice;sycl-jit;lld",
         "LLVM_EXTERNAL_SYCL_SOURCE_DIR": "${sourceDir}/../sycl",
         "LLVM_EXTERNAL_LLVM_SPIRV_SOURCE_DIR": "${sourceDir}/../llvm-spirv",
         "LLVM_EXTERNAL_XPTI_SOURCE_DIR": "${sourceDir}/../xpti",
@@ -45,6 +45,22 @@
         "SYCL_ENABLE_MAJOR_RELEASE_PREVIEW_LIB": true,
         "XPTI_ENABLE_WERROR": false,
         "NATIVECPU_USE_OCK": false,
+        "AA": "BB"
+      }
+    },
+    {
+      "name": "cross",
+      "inherits": "osx",
+      "binaryDir": "${sourceDir}/../build-cross",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "Linux",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/../build-cross/install",
+        "CMAKE_C_COMPILER": "${sourceDir}/../build/bin/clang",
+        "CMAKE_CXX_COMPILER": "${sourceDir}/../build/bin/clang++",
+        "CMAKE_LINKER_TYPE": "LLD",
+        "LLVM_ENABLE_PROJECTS": "sycl;libdevice;opencl",
+        "CMAKE_C_FLAGS": "-target aarch64-unknown-linux-gnu --sysroot aarch64-unknown-linux-gnu -isystem aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
+        "CMAKE_CXX_FLAGS": "-target aarch64-unknown-linux-gnu --sysroot aarch64-unknown-linux-gnu -isystem aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
         "AA": "BB"
       }
     }

@@ -151,6 +151,9 @@ set(CLANG_VERSION "${CLANG_VERSION_MAJOR}.${CLANG_VERSION_MINOR}.${CLANG_VERSION
 set(SYCL_INCLUDE_DIR "include")
 set(SYCL_INCLUDE_BUILD_DIR ${LLVM_BINARY_DIR}/${SYCL_INCLUDE_DIR})
 
+# sycl ========vvvv
+if ("sycl" IN_LIST LLVM_ENABLE_PROJECTS)
+
 add_llvm_external_project(opencl)
 list(FIND LLVM_ENABLE_PROJECTS opencl OPENCL_FOUND)
 if(OPENCL_FOUND EQUAL -1)
@@ -161,6 +164,9 @@ endif()
 # Compiler does automatic lookup bin/../include based on clang binary location,
 # e.g. when run LIT tests
 file(COPY ${OpenCL_INCLUDE_DIR}/CL DESTINATION ${SYCL_INCLUDE_BUILD_DIR})
+
+endif()
+# sycl ========^^^^
 
 # Include OpenCL Headers into final bundle.
 install(DIRECTORY ${OpenCL_INCLUDE_DIR}/CL

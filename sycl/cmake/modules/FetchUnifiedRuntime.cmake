@@ -117,13 +117,13 @@ if(SYCL_UR_USE_FETCH_CONTENT)
   endfunction()
 
   set(UNIFIED_RUNTIME_REPO "https://github.com/oneapi-src/unified-runtime.git")
-  # commit 7a2caca559da81620c7430521873045bf42eafc1
-  # Merge: 1d1808a4 96f66e0f
-  # Author: Piotr Balcer <piotr.balcer@intel.com>
-  # Date:   Tue Sep 24 13:00:46 2024 +0200
-  #     Merge pull request #2117 from pbalcer/fix-filter-out-same-cmdlists
-  #     Fix urEnqueueEventsWaitWithBarrier when used with interop events
-  set(UNIFIED_RUNTIME_TAG 7a2caca559da81620c7430521873045bf42eafc1)
+  # commit 53c461b257e7bbf5827147c3b5ca0b8ea45b434d
+  # Merge: 2c4bf63b d93b262b
+  # Author: aarongreig <aaron.greig@codeplay.com>
+  # Date:   Fri Oct 11 11:01:37 2024 +0100
+  #     Merge pull request #2174 from ProGTX/peter/winfix
+  #     [NFC][CUDA] Include STL headers in program.cpp
+  set(UNIFIED_RUNTIME_TAG 53c461b257e7bbf5827147c3b5ca0b8ea45b434d)
 
   set(UMF_BUILD_EXAMPLES OFF CACHE INTERNAL "EXAMPLES")
   # Due to the use of dependentloadflag and no installer for UMF and hwloc we need

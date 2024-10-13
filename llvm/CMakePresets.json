@@ -65,6 +65,16 @@
         "CMAKE_CXX_FLAGS": "-target aarch64-unknown-linux-gnu --sysroot aarch64-unknown-linux-gnu -isystem aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
         "AA": "BB"
       }
+    },
+    {
+      "name": "cross_demo",
+      "inherits": "cross",
+      "cacheVariables": {
+        "CMAKE_C_FLAGS": "-target aarch64-unknown-linux-gnu --sysroot sysroot/aarch64-unknown-linux-gnu -isystem sysroot/aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
+        "CMAKE_CXX_FLAGS": "-target aarch64-unknown-linux-gnu --sysroot sysroot/aarch64-unknown-linux-gnu -isystem sysroot/aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
+        "LIBDEVICE_EXTRA_COMPILE_OPTS": "-target aarch64-unknown-linux-gnu --sysroot sysroot/aarch64-unknown-linux-gnu -isystem sysroot/aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
+        "AA": "BB"
+      }
     }
   ]
 }

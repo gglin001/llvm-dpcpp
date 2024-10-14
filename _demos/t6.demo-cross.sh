@@ -44,7 +44,7 @@ args=(
 clang++ "${args[@]}" 2>&1 | tee build.log
 # SYCL_DEVICELIB_NO_FALLBACK=1 \
 #   clang++ "${args[@]}" 2>&1 | tee build.log
-# popd
+popd
 
 exit
 

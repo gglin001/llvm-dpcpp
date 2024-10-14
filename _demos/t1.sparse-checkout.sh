@@ -16,6 +16,10 @@ git sparse-checkout add \
 git sparse-checkout add \
   '/lld' '/libunwind'
 
+# optional
+git sparse-checkout add \
+  '/sysroot'
+
 git sparse-checkout list
 git checkout
 popd

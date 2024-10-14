@@ -13,8 +13,8 @@ args=(
   -fuse-ld=lld
   #
   -target aarch64-unknown-linux-gnu
-  --sysroot /Users/allen/repos/_blogs/aarch64-toolchain/sysroot/aarch64-unknown-linux-gnu
-  -isystem /Users/allen/repos/_blogs/aarch64-toolchain/sysroot/aarch64-unknown-linux-gnu/include/aarch64-linux-gnu
+  --sysroot $PPWD/sysroot/aarch64-unknown-linux-gnu
+  -isystem $PPWD/sysroot/aarch64-unknown-linux-gnu/include/aarch64-linux-gnu
   #
   -isystem $PPWD/build-cross/include
   -L$PPWD/build-cross/lib

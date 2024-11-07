@@ -1490,9 +1490,10 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   }
 
   // CUDA device path compilaton
-  if (LangOpts.CUDAIsDevice && !LangOpts.HIP) {
+  if (LangOpts.CUDAIsDevice && !LangOpts.HIP && !LangOpts.isSYCL()) {
     // The CUDA_ARCH value is set for the GPU target specified in the NVPTX
     // backend's target defines.
+    // Note: SYCL targeting nvptx-cuda relies on __SYCL_CUDA_ARCH__ instead.
     Builder.defineMacro("__CUDA_ARCH__");
   }
 
@@ -1512,7 +1513,8 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     const llvm::Triple::SubArchType DeviceSubArch = DeviceTriple.getSubArch();
     if (DeviceTriple.isNVPTX() || DeviceTriple.isAMDGPU() ||
         (DeviceTriple.isSPIR() &&
-         DeviceSubArch != llvm::Triple::SPIRSubArch_fpga))
+         DeviceSubArch != llvm::Triple::SPIRSubArch_fpga) ||
+        LangOpts.SYCLIsNativeCPU)
       Builder.defineMacro("SYCL_USE_NATIVE_FP_ATOMICS");
     // Enable generation of USM address spaces for FPGA.
     if (DeviceSubArch == llvm::Triple::SPIRSubArch_fpga) {
@@ -1660,6 +1662,13 @@ void clang::InitializePreprocessor(Preprocessor &PP,
   for (unsigned i = 0, e = InitOpts.Includes.size(); i != e; ++i) {
     const std::string &Path = InitOpts.Includes[i];
     AddImplicitInclude(Builder, Path);
+  }
+
+  // Process -include-internal-header directive.
+  if (!LangOpts.SYCLIsDevice) {
+    if (!InitOpts.IncludeHeader.empty()) {
+      AddImplicitInclude(Builder, InitOpts.IncludeHeader);
+    }
   }
 
   // Instruct the preprocessor to skip the preamble.

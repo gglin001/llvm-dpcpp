@@ -4000,9 +4000,9 @@ standard:
 - ``4``  - to nearest, ties away from zero
 The effect of passing some other value to ``__builtin_flt_rounds`` is
 implementation-defined. ``__builtin_set_flt_rounds`` is currently only supported
-to work on x86, x86_64, Arm and AArch64 targets. These builtins read and modify
-the floating-point environment, which is not always allowed and may have unexpected
-behavior. Please see the section on `Accessing the floating point environment <https://clang.llvm.org/docs/UsersManual.html#accessing-the-floating-point-environment>`_ for more information.
+to work on x86, x86_64, powerpc, powerpc64, Arm and AArch64 targets. These builtins
+read and modify the floating-point environment, which is not always allowed and may
+have unexpected behavior. Please see the section on `Accessing the floating point environment <https://clang.llvm.org/docs/UsersManual.html#accessing-the-floating-point-environment>`_ for more information.
 
 String builtins
 ---------------
@@ -5904,3 +5904,26 @@ specify the starting offset to begin embedding from. The resources is treated
 as being empty if the specified offset is larger than the number of bytes in
 the resource. The offset will be applied *before* any ``limit`` parameters are
 applied.
+
+Union and aggregate initialization in C
+=======================================
+
+In C23 (N2900), when an object is initialized from initializer ``= {}``, all
+elements of arrays, all members of structs, and the first members of unions are
+empty-initialized recursively. In addition, all padding bits are initialized to
+zero.
+
+Clang guarantees the following behaviors:
+
+* ``1:`` Clang supports initializer ``= {}`` mentioned above in all C
+  standards.
+
+* ``2:`` When unions are initialized from initializer ``= {}``, bytes outside
+  of the first members of unions are also initialized to zero.
+
+* ``3:`` When unions, structures and arrays are initialized from initializer
+  ``= { initializer-list }``, all members not explicitly initialized in
+  the initializer list are empty-initialized recursively. In addition, all
+  padding bits are initialized to zero.
+
+Currently, the above extension only applies to C source code, not C++.

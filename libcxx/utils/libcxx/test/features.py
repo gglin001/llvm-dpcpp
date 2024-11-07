@@ -497,6 +497,14 @@ DEFAULT_FEATURES += [
         ),
     ),
     Feature(
+        name="LIBCXX-AMDGPU-FIXME",
+        when=lambda cfg: "__AMDGPU__" in compilerMacros(cfg),
+    ),
+    Feature(
+        name="LIBCXX-NVPTX-FIXME",
+        when=lambda cfg: "__NVPTX__" in compilerMacros(cfg),
+    ),
+    Feature(
         name="can-create-symlinks",
         when=lambda cfg: "_WIN32" not in compilerMacros(cfg)
         or programSucceeds(
@@ -792,6 +800,14 @@ DEFAULT_FEATURES += [
         name="availability-tzdb-missing",
         when=lambda cfg: BooleanExpression.evaluate(
             "!libcpp-has-no-availability-markup && (stdlib=apple-libc++ && !_target-has-llvm-19)",
+            cfg.available_features,
+        ),
+    ),
+    # Tests that require std::from_chars(floating-point) in the built library
+    Feature(
+        name="availability-fp_from_chars-missing",
+        when=lambda cfg: BooleanExpression.evaluate(
+            "!libcpp-has-no-availability-markup && (stdlib=apple-libc++ && !_target-has-llvm-20)",
             cfg.available_features,
         ),
     ),

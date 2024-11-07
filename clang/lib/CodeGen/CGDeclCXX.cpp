@@ -817,7 +817,10 @@ void CodeGenModule::EmitCXXModuleInitFunc(Module *Primary) {
   assert(!getLangOpts().CUDA || !getLangOpts().CUDAIsDevice ||
          getLangOpts().GPUAllowDeviceInit);
   if (getLangOpts().HIP && getLangOpts().CUDAIsDevice) {
-    Fn->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
+    if (getTriple().isSPIRV())
+      Fn->setCallingConv(llvm::CallingConv::SPIR_KERNEL);
+    else
+      Fn->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
     Fn->addFnAttr("device-init");
   }
 
@@ -975,7 +978,10 @@ CodeGenModule::EmitCXXGlobalInitFunc() {
   assert(!getLangOpts().CUDA || !getLangOpts().CUDAIsDevice ||
          getLangOpts().GPUAllowDeviceInit);
   if (getLangOpts().HIP && getLangOpts().CUDAIsDevice) {
-    Fn->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
+    if (getTriple().isSPIRV())
+      Fn->setCallingConv(llvm::CallingConv::SPIR_KERNEL);
+    else
+      Fn->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
     Fn->addFnAttr("device-init");
   }
 
@@ -1122,6 +1128,14 @@ CodeGenFunction::GenerateCXXGlobalInitFunc(llvm::Function *Fn,
     for (unsigned i = 0, e = Decls.size(); i != e; ++i)
       if (Decls[i])
         EmitRuntimeCall(Decls[i]);
+
+    if (getLangOpts().HLSL) {
+      CGHLSLRuntime &CGHLSL = CGM.getHLSLRuntime();
+      if (CGHLSL.needsResourceBindingInitFn()) {
+        llvm::Function *ResInitFn = CGHLSL.createResourceBindingInitFn();
+        Builder.CreateCall(llvm::FunctionCallee(ResInitFn), {});
+      }
+    }
 
     Scope.ForceCleanup();
 

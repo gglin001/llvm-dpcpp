@@ -2607,7 +2607,7 @@ bool SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
           MI->removeOperand(FIOperandNum);
 
           unsigned NumOps = MI->getNumOperands();
-          for (unsigned I = NumOps - 2; I >= 2; --I)
+          for (unsigned I = NumOps - 2; I >= NumDefs + 1; --I)
             MI->removeOperand(I);
 
           if (NumDefs == 2)
@@ -2628,8 +2628,10 @@ bool SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
         std::swap(FIOperandNum, OtherOpIdx);
       }
 
-      for (unsigned SrcIdx : {Src1Idx, Src0Idx}) {
-        // Depending on operand constraints we may need to insert another copy.
+      // We need at most one mov to satisfy the operand constraints. Prefer to
+      // move the FI operand first, as it may be a literal in a VOP3
+      // instruction.
+      for (unsigned SrcIdx : {FIOperandNum, OtherOpIdx}) {
         if (!TII->isOperandLegal(*MI, SrcIdx)) {
           // If commuting didn't make the operands legal, we need to materialize
           // in a register.
@@ -2648,6 +2650,7 @@ bool SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
 
           Src.ChangeToRegister(ScavengedVGPR, false);
           Src.setIsKill(true);
+          break;
         }
       }
 
@@ -2678,12 +2681,18 @@ bool SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
 
       Register TmpReg;
 
+      // FIXME: Scavenger should figure out that the result register is
+      // available. Also should do this for the v_add case.
+      if (OtherOp.isReg() && OtherOp.getReg() != DstOp.getReg())
+        TmpReg = DstOp.getReg();
+
       if (FrameReg && !ST.enableFlatScratch()) {
         // FIXME: In the common case where the add does not also read its result
         // (i.e. this isn't a reg += fi), it's not finding the dest reg as
         // available.
-        TmpReg = RS->scavengeRegisterBackwards(AMDGPU::SReg_32_XM0RegClass, MI,
-                                               false, 0);
+        if (!TmpReg)
+          TmpReg = RS->scavengeRegisterBackwards(AMDGPU::SReg_32_XM0RegClass,
+                                                 MI, false, 0);
         BuildMI(*MBB, *MI, DL, TII->get(AMDGPU::S_LSHR_B32))
             .addDef(TmpReg, RegState::Renamable)
             .addReg(FrameReg)
@@ -2711,7 +2720,8 @@ bool SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
 
         if (!TmpReg && MaterializedReg == FrameReg) {
           TmpReg = RS->scavengeRegisterBackwards(AMDGPU::SReg_32_XM0RegClass,
-                                                 MI, false, 0);
+                                                 MI, /*RestoreAfter=*/false, 0,
+                                                 /*AllowSpill=*/false);
           DstReg = TmpReg;
         }
 
@@ -3843,4 +3853,23 @@ SIRegisterInfo::getSubRegAlignmentNumBits(const TargetRegisterClass *RC,
     break;
   }
   return 0;
+}
+
+unsigned
+SIRegisterInfo::getNumUsedPhysRegs(const MachineRegisterInfo &MRI,
+                                   const TargetRegisterClass &RC) const {
+  for (MCPhysReg Reg : reverse(RC.getRegisters()))
+    if (MRI.isPhysRegUsed(Reg))
+      return getHWRegIndex(Reg) + 1;
+  return 0;
+}
+
+SmallVector<StringLiteral>
+SIRegisterInfo::getVRegFlagsOfReg(Register Reg,
+                                  const MachineFunction &MF) const {
+  SmallVector<StringLiteral> RegFlags;
+  const SIMachineFunctionInfo *FuncInfo = MF.getInfo<SIMachineFunctionInfo>();
+  if (FuncInfo->checkFlag(Reg, AMDGPU::VirtRegFlag::WWM_REG))
+    RegFlags.push_back("WWM_REG");
+  return RegFlags;
 }

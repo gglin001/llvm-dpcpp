@@ -50,6 +50,14 @@ def GIAddrRegImm :
   GIComplexOperandMatcher<s32, "selectAddrRegImm">,
   GIComplexPatternEquiv<AddrRegImm>;
 
+// FIXME: This is labelled as handling 's32', however the ComplexPattern it
+// refers to handles both i32 and i64 based on the HwMode. Currently this LLT
+// parameter appears to be ignored so this pattern works for both, however we
+// should add a LowLevelTypeByHwMode, and use that to define our XLenLLT instead
+// here.
+def GIVLOp : GIComplexOperandMatcher<s32, "renderVLOp">,
+             GIComplexPatternEquiv<VLOp>;
+
 // Convert from i32 immediate to i64 target immediate to make SelectionDAG type
 // checking happy so we can use ADDIW which expects an XLen immediate.
 def as_i64imm : SDNodeXForm<imm, [{
@@ -87,15 +95,6 @@ def gi_sh2add_uw_op : GIComplexOperandMatcher<s32, "selectSHXADD_UWOp<2>">,
                       GIComplexPatternEquiv<sh2add_uw_op>;
 def gi_sh3add_uw_op : GIComplexOperandMatcher<s32, "selectSHXADD_UWOp<3>">,
                       GIComplexPatternEquiv<sh3add_uw_op>;
-
-// FIXME: Canonicalize (sub X, C) -> (add X, -C) earlier.
-def : Pat<(XLenVT (sub GPR:$rs1, simm12Plus1:$imm)),
-          (ADDI GPR:$rs1, (NegImm simm12Plus1:$imm))>;
-
-let Predicates = [IsRV64] in {
-def : Pat<(i32 (sub GPR:$rs1, simm12Plus1i32:$imm)),
-          (ADDIW GPR:$rs1, (i64 (NegImm $imm)))>;
-}
 
 // Ptr type used in patterns with GlobalISelEmitter
 def PtrVT : PtrValueTypeByHwMode<XLenVT, 0>;
@@ -266,7 +265,7 @@ def : Pat<(i32 (xor GPR:$rs1, (not GPR:$rs2))), (XNOR GPR:$rs1, GPR:$rs2)>;
 
 def : PatGprGpr<rotl, ROLW, i32, i32>;
 def : PatGprGpr<rotr, RORW, i32, i32>;
-def : Pat<(i32 (rotl GPR:$rs1, uimm5i32:$imm)),
+def : Pat<(i32 (rotr GPR:$rs1, uimm5i32:$imm)),
           (RORIW GPR:$rs1, (i64 (as_i64imm $imm)))>;
 
 def : Pat<(i32 (rotl GPR:$rs1, uimm5i32:$rs2)),

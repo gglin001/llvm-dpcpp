@@ -524,6 +524,7 @@ std::string Linux::getDynamicLinker(const ArgList &Args) const {
   case llvm::Triple::thumbeb: {
     const bool HF =
         Triple.getEnvironment() == llvm::Triple::GNUEABIHF ||
+        Triple.getEnvironment() == llvm::Triple::GNUEABIHFT64 ||
         tools::arm::getARMFloatABI(*this, Args) == tools::arm::FloatABI::Hard;
 
     LibDir = "lib";
@@ -769,6 +770,11 @@ void Linux::AddIAMCUIncludeArgs(const ArgList &DriverArgs,
         GCCInstallation.getParentLibPath() + "/../" +
         GCCInstallation.getTriple().str() + "/include"));
   }
+}
+
+void Linux::AddSYCLIncludeArgs(const ArgList &DriverArgs,
+                               ArgStringList &CC1Args) const {
+  SYCLInstallation.AddSYCLIncludeArgs(DriverArgs, CC1Args);
 }
 
 bool Linux::isPIEDefault(const llvm::opt::ArgList &Args) const {

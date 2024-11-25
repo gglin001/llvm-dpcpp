@@ -1,4 +1,4 @@
-###############################################################################
+ˇ###############################################################################
 
 # build sycl-toolchain
 python buildbot/compile.py -t sycl-toolchain
@@ -47,6 +47,9 @@ args=(
   --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_osx"
   # --cmake-opt="-DFETCHCONTENT_FULLY_DISCONNECTED=ON"
   --cmake-opt="-DFETCHCONTENT_UPDATES_DISCONNECTED=ON"
+  # for code reading
+  # --cmake-opt="-DLLVM_INCLUDE_TESTS=ON"
+  # --cmake-opt="-DSYCL_INCLUDE_TESTS=ON"
   --cmake-opt="-DLLVM_INCLUDE_TESTS=OFF"
   --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
   --cmake-opt="-DNATIVECPU_USE_OCK=OFF"
@@ -54,6 +57,21 @@ args=(
   --llvm-external-projects="lld"
 )
 python "${args[@]}"
+
+#######
+
+# for code reading using clangd on vscode
+
+ln -s \
+  $PWD/_demos/_deps_osx/boost_mp11-src/include/boost \
+  $PWD/sycl/include/sycl/detail/boost
+
+# append `.clangd`
+# ```
+# CompileFlags:
+#   Add:
+#     - -I/REPLACE_PWD/_demos/_deps_osx/boost_mp11-src/include
+# ```
 
 ###############################################################################
 

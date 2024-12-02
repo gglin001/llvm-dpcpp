@@ -1452,6 +1452,7 @@ static bool isSignedCharDefault(const llvm::Triple &Triple) {
     return false;
 
   case llvm::Triple::hexagon:
+  case llvm::Triple::msp430:
   case llvm::Triple::ppcle:
   case llvm::Triple::ppc64le:
   case llvm::Triple::riscv32:
@@ -4639,6 +4640,8 @@ static void RenderDiagnosticsOptions(const Driver &D, const ArgList &Args,
 
   Args.addOptOutFlag(CmdArgs, options::OPT_fspell_checking,
                      options::OPT_fno_spell_checking);
+
+  Args.addLastArg(CmdArgs, options::OPT_warning_suppression_mappings_EQ);
 }
 
 DwarfFissionKind tools::getDebugFissionKind(const Driver &D,
@@ -6057,6 +6060,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     } else if (JA.getType() == types::TY_RewrittenLegacyObjC) {
       CmdArgs.push_back("-rewrite-objc");
       rewriteKind = RK_Fragile;
+    } else if (JA.getType() == types::TY_CIR) {
+      CmdArgs.push_back("-emit-cir");
     } else {
       assert(JA.getType() == types::TY_PP_Asm && "Unexpected output type!");
     }
@@ -6518,7 +6523,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
             << Name << Triple.getArchName();
     } else if (Name == "SLEEF" || Name == "ArmPL") {
       if (Triple.getArch() != llvm::Triple::aarch64 &&
-          Triple.getArch() != llvm::Triple::aarch64_be)
+          Triple.getArch() != llvm::Triple::aarch64_be &&
+          Triple.getArch() != llvm::Triple::riscv64)
         D.Diag(diag::err_drv_unsupported_opt_for_target)
             << Name << Triple.getArchName();
     }
@@ -8102,6 +8108,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                     !types::isOpenCL(InputType) &&
                         (!IsWindowsMSVC || IsMSVC2015Compatible)))
     CmdArgs.push_back("-fno-threadsafe-statics");
+
+  if (!Args.hasFlag(options::OPT_fms_tls_guards, options::OPT_fno_ms_tls_guards,
+                    true))
+    CmdArgs.push_back("-fno-ms-tls-guards");
 
   // Add -fno-assumptions, if it was specified.
   if (!Args.hasFlag(options::OPT_fassumptions, options::OPT_fno_assumptions,
@@ -10393,33 +10403,48 @@ void OffloadWrapper::ConstructJob(Compilation &C, const JobAction &JA,
   assert(JA.getInputs().size() == Inputs.size() &&
          "Not have inputs for all dependence actions??");
 
-  // For FPGA, we wrap the host objects before archiving them when using
-  // -fsycl-link.  This allows for better extraction control from the
-  // archive when we need the host objects for subsequent compilations.
   if (OffloadingKind == Action::OFK_None &&
-      C.getArgs().hasArg(options::OPT_fintelfpga) &&
       C.getArgs().hasArg(options::OPT_fsycl_link_EQ)) {
 
-    // Add offload targets and inputs.
-    CmdArgs.push_back(C.getArgs().MakeArgString(
-        Twine("-kind=") + Action::GetOffloadKindName(OffloadingKind)));
-    CmdArgs.push_back(
-        TCArgs.MakeArgString(Twine("-target=") + Triple.getTriple()));
+    // For FPGA, we wrap the host objects before archiving them when using
+    // -fsycl-link.  This allows for better extraction control from the
+    // archive when we need the host objects for subsequent compilations.
+    if (C.getArgs().hasArg(options::OPT_fintelfpga)) {
 
-    if (Inputs[0].getType() == types::TY_Tempfiletable ||
-        Inputs[0].getType() == types::TY_Tempfilelist)
-      // Input files are passed via the batch job file table.
-      CmdArgs.push_back(C.getArgs().MakeArgString("-batch"));
+      // Add offload targets and inputs.
+      CmdArgs.push_back(C.getArgs().MakeArgString(
+          Twine("-kind=") + Action::GetOffloadKindName(OffloadingKind)));
+      CmdArgs.push_back(
+          TCArgs.MakeArgString(Twine("-target=") + Triple.getTriple()));
 
-    // Add input.
-    assert(Inputs[0].isFilename() && "Invalid input.");
-    CmdArgs.push_back(TCArgs.MakeArgString(Inputs[0].getFilename()));
+      if (Inputs[0].getType() == types::TY_Tempfiletable ||
+          Inputs[0].getType() == types::TY_Tempfilelist)
+        // Input files are passed via the batch job file table.
+        CmdArgs.push_back(C.getArgs().MakeArgString("-batch"));
 
-    C.addCommand(std::make_unique<Command>(
-        JA, *this, ResponseFileSupport::None(),
-        TCArgs.MakeArgString(getToolChain().GetProgramPath(getShortName())),
-        CmdArgs, Inputs));
-    return;
+      // Add input.
+      assert(Inputs[0].isFilename() && "Invalid input.");
+      CmdArgs.push_back(TCArgs.MakeArgString(Inputs[0].getFilename()));
+
+      C.addCommand(std::make_unique<Command>(
+          JA, *this, ResponseFileSupport::None(),
+          TCArgs.MakeArgString(getToolChain().GetProgramPath(getShortName())),
+          CmdArgs, Inputs));
+      return;
+    } else {
+      // When compiling and linking separately, we need to propagate the
+      // compression related CLI options to offload-wrapper. Don't propagate
+      // these options when wrapping objects for FPGA.
+      if (C.getInputArgs().getLastArg(options::OPT_offload_compress)) {
+        CmdArgs.push_back(
+            C.getArgs().MakeArgString(Twine("-offload-compress")));
+        // -offload-compression-level=<>
+        if (Arg *A = C.getInputArgs().getLastArg(
+                options::OPT_offload_compression_level_EQ))
+          CmdArgs.push_back(C.getArgs().MakeArgString(
+              Twine("-offload-compression-level=") + A->getValue()));
+      }
+    }
   }
 
   // Add offload targets and inputs.
@@ -10707,12 +10732,8 @@ static void getTripleBasedSPIRVTransOpts(Compilation &C,
                                          ArgStringList &TranslatorArgs) {
   bool IsCPU = Triple.isSPIR() &&
                Triple.getSubArch() == llvm::Triple::SPIRSubArch_x86_64;
-  // Enable NonSemanticShaderDebugInfo.200 for CPU AOT and for non-Windows
-  const bool IsWindowsMSVC =
-      Triple.isWindowsMSVCEnvironment() ||
-      C.getDefaultToolChain().getTriple().isWindowsMSVCEnvironment();
-  const bool EnableNonSemanticDebug =
-      IsCPU || (!IsWindowsMSVC && !C.getDriver().IsFPGAHWMode());
+  // Enable NonSemanticShaderDebugInfo.200 for non-FPGA targets.
+  const bool EnableNonSemanticDebug = !C.getDriver().IsFPGAHWMode();
   if (EnableNonSemanticDebug) {
     TranslatorArgs.push_back(
         "-spirv-debug-info-version=nonsemantic-shader-200");
@@ -11503,6 +11524,12 @@ void LinkerWrapper::ConstructJob(Compilation &C, const JobAction &JA,
 
     if (Args.hasArg(options::OPT_fsycl_embed_ir))
       CmdArgs.push_back(Args.MakeArgString("-sycl-embed-ir"));
+
+    if (Args.hasFlag(options::OPT_fsycl_allow_device_image_dependencies,
+                     options::OPT_fno_sycl_allow_device_image_dependencies,
+                     false))
+      CmdArgs.push_back(
+          Args.MakeArgString("-sycl-allow-device-image-dependencies"));
 
     // Formulate and add any offload-wrapper and AOT specific options. These
     // are additional options passed in via -Xsycl-target-linker and

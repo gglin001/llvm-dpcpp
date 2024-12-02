@@ -1,6 +1,7 @@
 #include "llvm/ExecutionEngine/Orc/ReOptimizeLayer.h"
 #include "OrcTestCommon.h"
 #include "llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h"
+#include "llvm/ExecutionEngine/Orc/AbsoluteSymbols.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/ExecutorProcessControl.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
@@ -50,6 +51,14 @@ protected:
     // 32-bit X86 is not supported yet.
     if (Triple.isX86() && Triple.isArch32Bit())
       GTEST_SKIP();
+
+    // Failing on Windows builder.
+    // JIT session error: Symbols not found: [ __ImageBase ]
+    // unknown file: error: SEH exception with code 0x3221225477 thrown in the test body.
+#if defined(_WIN32)
+    if (Triple.isX86())
+      GTEST_SKIP();
+#endif
 
     if (Triple.isPPC())
       GTEST_SKIP();

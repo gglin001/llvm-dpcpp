@@ -9,6 +9,7 @@
 #include <spirv/spirv.h>
 
 #include <clc/clc.h>
+#include <clc/clcmacro.h>
 #include <clc/shared/clc_clamp.h>
 #include <clc/clcmacro.h>
 #include <config.h>

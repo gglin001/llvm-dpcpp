@@ -5226,6 +5226,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                 D.setInvalidType();
                 Param->setInvalidDecl();
               }
+            } else if (S.getLangOpts().SYCLIsDevice) {
+              // workaround for `arm_neon.h`
             } else if (!S.getLangOpts().NativeHalfArgsAndReturns &&
                        !S.Context.getTargetInfo().allowHalfArgsAndReturns()) {
               S.Diag(Param->getLocation(),

@@ -32,6 +32,8 @@
         "LLVM_EXTERNAL_PROJECTS": "llvm-spirv",
         "LLVM_EXTERNAL_LLVM_SPIRV_SOURCE_DIR": "${sourceDir}/../llvm-spirv",
         "LLVM_ENABLE_PROJECTS": "clang;lld;llvm-spirv",
+        "LLVM_ENABLE_ZSTD": false,
+        "LLVM_ENABLE_ZLIB": false,
         "SYCL_ENABLE_BACKENDS": "opencl",
         "SYCL_ENABLE_WERROR": false,
         "SYCL_INCLUDE_TESTS": false,

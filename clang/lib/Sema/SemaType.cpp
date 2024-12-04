@@ -2545,9 +2545,10 @@ bool Sema::CheckFunctionReturnType(QualType T, SourceLocation Loc) {
 
   // Functions cannot return half FP.
   if (T->isHalfType() && !getLangOpts().NativeHalfArgsAndReturns &&
-      !Context.getTargetInfo().allowHalfArgsAndReturns()) {
-    Diag(Loc, diag::err_parameters_retval_cannot_have_fp16_type) << 1 <<
-      FixItHint::CreateInsertion(Loc, "*");
+      !Context.getTargetInfo().allowHalfArgsAndReturns() &&
+      !getLangOpts().SYCLIsDevice) {
+    Diag(Loc, diag::err_parameters_retval_cannot_have_fp16_type)
+        << 1 << FixItHint::CreateInsertion(Loc, "*");
     return true;
   }
 

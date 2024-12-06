@@ -30,6 +30,9 @@
 /build*
 !buildbot
 
+#pulldown temp folder
+/spirv-patches-*
+
 #==============================================================================#
 # Explicit files to ignore (only matches one).
 #==============================================================================#
@@ -52,8 +55,7 @@ autoconf/autom4te.cache
 /CMakeSettings.json
 # CLion project configuration
 /.idea
-
-.clangd
+/cmake-build*
 
 #==============================================================================#
 # Directories to ignore (do not add trailing '/'s, they skip symlinks).
@@ -65,6 +67,7 @@ autoconf/autom4te.cache
 pythonenv*
 # clangd index. (".clangd" is a config file now, thus trailing slash)
 .clangd/
+.clangd
 .cache
 # static analyzer regression testing project files
 /clang/utils/analyzer/projects/*/CachedSource
@@ -73,4 +76,3 @@ pythonenv*
 /clang/utils/analyzer/projects/*/RefScanBuildResults
 # automodapi puts generated documentation files here.
 /lldb/docs/python_api/
-

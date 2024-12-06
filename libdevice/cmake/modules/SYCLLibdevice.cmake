@@ -89,19 +89,19 @@ endforeach()
 # file and all files created this way are linked into one large bitcode
 # library.
 # Additional compilation options are needed for compiling each device library.
-# set(devicelib_arch)
-# if ("NVPTX" IN_LIST LLVM_TARGETS_TO_BUILD)
-#   list(APPEND devicelib_arch nvptx64-nvidia-cuda)
-#   set(compile_opts_nvptx64-nvidia-cuda "-fsycl-targets=nvptx64-nvidia-cuda"
-#   "-Xsycl-target-backend" "--cuda-gpu-arch=sm_50" "-nocudalib")
-#   set(opt_flags_nvptx64-nvidia-cuda "-O3" "--nvvm-reflect-enable=false")
-# endif()
-# if("AMDGPU" IN_LIST LLVM_TARGETS_TO_BUILD)
-#   list(APPEND devicelib_arch amdgcn-amd-amdhsa)
-#   set(compile_opts_amdgcn-amd-amdhsa "-nogpulib" "-fsycl-targets=amdgcn-amd-amdhsa"
-#   "-Xsycl-target-backend" "--offload-arch=gfx940")
-#   set(opt_flags_amdgcn-amd-amdhsa "-O3" "--amdgpu-oclc-reflect-enable=false")
-# endif()
+set(devicelib_arch)
+if ("NVPTX" IN_LIST LLVM_TARGETS_TO_BUILD)
+  list(APPEND devicelib_arch nvptx64-nvidia-cuda)
+  set(compile_opts_nvptx64-nvidia-cuda "-fsycl-targets=nvptx64-nvidia-cuda"
+  "-Xsycl-target-backend" "--cuda-gpu-arch=sm_50" "-nocudalib")
+  set(opt_flags_nvptx64-nvidia-cuda "-O3" "--nvvm-reflect-enable=false")
+endif()
+if("AMDGPU" IN_LIST LLVM_TARGETS_TO_BUILD)
+  list(APPEND devicelib_arch amdgcn-amd-amdhsa)
+  set(compile_opts_amdgcn-amd-amdhsa "-nogpulib" "-fsycl-targets=amdgcn-amd-amdhsa"
+  "-Xsycl-target-backend" "--offload-arch=gfx940")
+  set(opt_flags_amdgcn-amd-amdhsa "-O3" "--amdgpu-oclc-reflect-enable=false")
+endif()
 
 
 set(spv_device_compile_opts -fsycl-device-only -fsycl-device-obj=spirv)
@@ -298,20 +298,20 @@ if (NOT MSVC AND UR_SANITIZER_INCLUDE_DIR)
                                             -D__LIBDEVICE_DG2__)
 endif()
 
-# if("native_cpu" IN_LIST SYCL_ENABLE_BACKENDS)
-#   if (NOT DEFINED NATIVE_CPU_DIR)
-#     message( FATAL_ERROR "Undefined UR variable NATIVE_CPU_DIR. The name may have changed." )
-#   endif()
-#   # Include NativeCPU UR adapter path to enable finding header file with state struct.
-#   # libsycl-nativecpu_utils is only needed as BC file by NativeCPU.
-#   # Todo: add versions for other targets (for cross-compilation)
-#   compile_lib(libsycl-nativecpu_utils
-#     FILETYPE bc
-#     SRC nativecpu_utils.cpp
-#     DEPENDENCIES ${itt_obj_deps}
-#     EXTRA_OPTS -I ${NATIVE_CPU_DIR} -fsycl-targets=native_cpu -fsycl-device-only
-#                -fsycl-device-obj=llvmir)
-# endif()
+if("native_cpu" IN_LIST SYCL_ENABLE_BACKENDS)
+  if (NOT DEFINED NATIVE_CPU_DIR)
+    message( FATAL_ERROR "Undefined UR variable NATIVE_CPU_DIR. The name may have changed." )
+  endif()
+  # Include NativeCPU UR adapter path to enable finding header file with state struct.
+  # libsycl-nativecpu_utils is only needed as BC file by NativeCPU.
+  # Todo: add versions for other targets (for cross-compilation)
+  compile_lib(libsycl-nativecpu_utils
+    FILETYPE bc
+    SRC nativecpu_utils.cpp
+    DEPENDENCIES ${itt_obj_deps}
+    EXTRA_OPTS -I ${NATIVE_CPU_DIR} -fsycl-targets=native_cpu -fsycl-device-only
+               -fsycl-device-obj=llvmir)
+endif()
 
 # Add all device libraries for each filetype except for the Intel math function
 # ones.

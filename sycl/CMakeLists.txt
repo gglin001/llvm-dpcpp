@@ -146,9 +146,7 @@ set(CLANG_VERSION "${CLANG_VERSION_MAJOR}.${CLANG_VERSION_MINOR}.${CLANG_VERSION
 set(SYCL_INCLUDE_DIR "include")
 set(SYCL_INCLUDE_BUILD_DIR ${LLVM_BINARY_DIR}/${SYCL_INCLUDE_DIR})
 
-# sycl ========vvvv
 if ("sycl" IN_LIST LLVM_ENABLE_PROJECTS)
-
 add_llvm_external_project(opencl)
 list(FIND LLVM_ENABLE_PROJECTS opencl OPENCL_FOUND)
 if(OPENCL_FOUND EQUAL -1)
@@ -159,9 +157,7 @@ endif()
 # Compiler does automatic lookup bin/../include based on clang binary location,
 # e.g. when run LIT tests
 file(COPY ${OpenCL_INCLUDE_DIR}/CL DESTINATION ${SYCL_INCLUDE_BUILD_DIR})
-
 endif()
-# sycl ========^^^^
 
 # Include OpenCL Headers into final bundle.
 install(DIRECTORY ${OpenCL_INCLUDE_DIR}/CL
@@ -370,27 +366,29 @@ endif()
 
 # SYCL toolchain builds all components: compiler, libraries, headers, etc.
 add_custom_target(sycl-compiler)
-# add_custom_target(sycl-compiler
-#   DEPENDS append-file
-#           clang
-#           clang-offload-wrapper
-#           clang-offload-bundler
-#           clang-offload-deps
-#           clang-offload-extract
-#           clang-offload-packager
-#           clang-linker-wrapper
-#           file-table-tform
-#           llc
-#           llvm-ar
-#           llvm-foreach
-#           llvm-spirv
-#           llvm-link
-#           llvm-objcopy
-#           llvm-dis
-#           spirv-to-ir-wrapper
-#           sycl-post-link
-#           opencl-aot
-# )
+if (0)
+add_custom_target(sycl-compiler
+  DEPENDS append-file
+          clang
+          clang-offload-wrapper
+          clang-offload-bundler
+          clang-offload-deps
+          clang-offload-extract
+          clang-offload-packager
+          clang-linker-wrapper
+          file-table-tform
+          llc
+          llvm-ar
+          llvm-foreach
+          llvm-spirv
+          llvm-link
+          llvm-objcopy
+          llvm-dis
+          spirv-to-ir-wrapper
+          sycl-post-link
+          opencl-aot
+)
+endif(0)
 
 add_custom_target( sycl-runtime-libraries
   DEPENDS ${SYCL_RT_LIBS}
@@ -450,27 +448,6 @@ get_property(SYCL_TOOLCHAIN_DEPS GLOBAL PROPERTY SYCL_TOOLCHAIN_INSTALL_COMPONEN
 # Package deploy support
 # Listed here are component names contributing the package
 set( SYCL_TOOLCHAIN_DEPLOY_COMPONENTS
-    #  append-file
-    #  boost_mp11-headers
-    #  clang
-    #  clang-offload-wrapper
-    #  clang-offload-bundler
-    #  clang-offload-deps
-    #  clang-offload-extract
-    #  clang-offload-packager
-    #  clang-linker-wrapper
-    #  file-table-tform
-    #  llc
-    #  llvm-ar
-    #  llvm-foreach
-    #  llvm-spirv
-    #  llvm-link
-    #  llvm-objcopy
-    #  llvm-dis
-    #  spirv-to-ir-wrapper
-    #  sycl-post-link
-    #  sycl-ls
-    #  clang-resource-headers
      OpenCL-Headers
      opencl-aot
      sycl-headers
@@ -482,6 +459,41 @@ set( SYCL_TOOLCHAIN_DEPLOY_COMPONENTS
      ${XPTIFW_LIBS}
      ${SYCL_TOOLCHAIN_DEPS}
 )
+if (0)
+set( SYCL_TOOLCHAIN_DEPLOY_COMPONENTS
+     append-file
+     boost_mp11-headers
+     clang
+     clang-offload-wrapper
+     clang-offload-bundler
+     clang-offload-deps
+     clang-offload-extract
+     clang-offload-packager
+     clang-linker-wrapper
+     file-table-tform
+     llc
+     llvm-ar
+     llvm-foreach
+     llvm-spirv
+     llvm-link
+     llvm-objcopy
+     llvm-dis
+     spirv-to-ir-wrapper
+     sycl-post-link
+     sycl-ls
+     clang-resource-headers
+     OpenCL-Headers
+     opencl-aot
+     sycl-headers
+     sycl-headers-extras
+     sycl
+     libsycldevice
+     unified-memory-framework
+     unified-runtime-loader
+     ${XPTIFW_LIBS}
+     ${SYCL_TOOLCHAIN_DEPS}
+)
+endif(0)
 
 if (WIN32)
   list(APPEND SYCL_TOOLCHAIN_DEPLOY_COMPONENTS ur_win_proxy_loader)

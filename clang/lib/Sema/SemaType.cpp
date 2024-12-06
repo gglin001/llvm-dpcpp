@@ -2545,9 +2545,10 @@ bool Sema::CheckFunctionReturnType(QualType T, SourceLocation Loc) {
 
   // Functions cannot return half FP.
   if (T->isHalfType() && !getLangOpts().NativeHalfArgsAndReturns &&
-      !Context.getTargetInfo().allowHalfArgsAndReturns()) {
-    Diag(Loc, diag::err_parameters_retval_cannot_have_fp16_type) << 1 <<
-      FixItHint::CreateInsertion(Loc, "*");
+      !Context.getTargetInfo().allowHalfArgsAndReturns() &&
+      !getLangOpts().SYCLIsDevice) {
+    Diag(Loc, diag::err_parameters_retval_cannot_have_fp16_type)
+        << 1 << FixItHint::CreateInsertion(Loc, "*");
     return true;
   }
 
@@ -4958,6 +4959,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                 << T << 0 /*pointer hint*/;
             D.setInvalidType(true);
           }
+        } else if (S.getLangOpts().SYCLIsDevice) {
+          // workaround for `arm_neon.h`
         } else if (!S.getLangOpts().NativeHalfArgsAndReturns &&
                    !S.Context.getTargetInfo().allowHalfArgsAndReturns()) {
           S.Diag(D.getIdentifierLoc(),
@@ -5218,6 +5221,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                 D.setInvalidType();
                 Param->setInvalidDecl();
               }
+            } else if (S.getLangOpts().SYCLIsDevice) {
+              // workaround for `arm_neon.h`
             } else if (!S.getLangOpts().NativeHalfArgsAndReturns &&
                        !S.Context.getTargetInfo().allowHalfArgsAndReturns()) {
               S.Diag(Param->getLocation(),
@@ -8349,10 +8354,11 @@ static bool verifyValidIntegerConstantExpr(Sema &S, const ParsedAttr &Attr,
 /// match one of the standard Neon vector types.
 static void HandleNeonVectorTypeAttr(QualType &CurType, const ParsedAttr &Attr,
                                      Sema &S, VectorKind VecKind) {
-  bool IsTargetCUDAAndHostARM = false;
-  if (S.getLangOpts().CUDAIsDevice) {
+  bool IsTargetDeviceAndHostARM = false;
+  // workaround for `arm_neon.h`
+  if (S.getLangOpts().CUDAIsDevice || S.getLangOpts().SYCLIsDevice) {
     const TargetInfo *AuxTI = S.getASTContext().getAuxTargetInfo();
-    IsTargetCUDAAndHostARM =
+    IsTargetDeviceAndHostARM =
         AuxTI && (AuxTI->getTriple().isAArch64() || AuxTI->getTriple().isARM());
   }
 
@@ -8389,7 +8395,7 @@ static void HandleNeonVectorTypeAttr(QualType &CurType, const ParsedAttr &Attr,
 
   // Only certain element types are supported for Neon vectors.
   if (!isPermittedNeonBaseType(CurType, VecKind, S) &&
-      !IsTargetCUDAAndHostARM) {
+      !IsTargetDeviceAndHostARM) {
     S.Diag(Attr.getLoc(), diag::err_attribute_invalid_vector_type) << CurType;
     Attr.setInvalid();
     return;

@@ -65,6 +65,7 @@
         "LLVM_EXTERNAL_LIBDEVICE_SOURCE_DIR": "${sourceDir}/../libdevice",
         "LLVM_EXTERNAL_SYCL_JIT_SOURCE_DIR": "${sourceDir}/../sycl-jit",
         "LLVM_ENABLE_PROJECTS": "sycl;libdevice;opencl",
+        "LLVM_INCLUDE_UTILS": false,
         "CMAKE_C_FLAGS": "-target aarch64-unknown-linux-gnu --sysroot aarch64-unknown-linux-gnu -isystem aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
         "CMAKE_CXX_FLAGS": "-target aarch64-unknown-linux-gnu --sysroot aarch64-unknown-linux-gnu -isystem aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
         "AA": "BB"

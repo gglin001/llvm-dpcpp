@@ -76,7 +76,7 @@
       "cacheVariables": {
         "CMAKE_C_FLAGS": "-target aarch64-unknown-linux-gnu --sysroot ${sourceDir}/../sysroot/aarch64-unknown-linux-gnu -isystem ${sourceDir}/../sysroot/aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
         "CMAKE_CXX_FLAGS": "-target aarch64-unknown-linux-gnu --sysroot ${sourceDir}/../sysroot/aarch64-unknown-linux-gnu -isystem ${sourceDir}/../sysroot/aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
-        "LIBDEVICE_EXTRA_COMPILE_OPTS": "-target aarch64-unknown-linux-gnu --sysroot ${sourceDir}/../sysroot/aarch64-unknown-linux-gnu -isystem ${sourceDir}/../sysroot/aarch64-unknown-linux-gnu/include/aarch64-linux-gnu",
+        "LIBDEVICE_EXTRA_COMPILE_OPTS": "-target aarch64-unknown-linux-gnu --sysroot ${sourceDir}/../sysroot/aarch64-unknown-linux-gnu -isystem ${sourceDir}/../sysroot/aarch64-unknown-linux-gnu/include/aarch64-linux-gnu -isystem ${sourceDir}/../build-cross/include",
         "AA": "BB"
       }
     }

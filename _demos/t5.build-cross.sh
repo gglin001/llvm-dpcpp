@@ -19,6 +19,8 @@ cmake --build $PWD/build-cross --target help >_demos/cmake.cross.target.help.log
 
 ###############################################################################
 
+# TODO: can we use `-sycl-device-library-location` in CMD ?
+
 # find build-cross/lib -name "libsycl*.o" -printf "%f\n" | xargs -d"\n" -I{} echo {}
 find build-cross/lib -name "libsycl*.o" -printf "%f\n" | xargs -d"\n" -I{} ln -s $PWD/build-cross/lib/{} $PWD/build/lib/
 

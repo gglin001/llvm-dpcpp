@@ -28,6 +28,7 @@
         "LLVM_APPEND_VC_REV": false,
         "LLVM_ENABLE_IDE": true,
         "LLVM_TARGETS_TO_BUILD": "AArch64",
+        "LLVM_EXPERIMENTAL_TARGETS_TO_BUILD": "SPIRV",
         "LLVM_DEFAULT_TARGET_TRIPLE": "aarch64-unknown-linux-gnu",
         "LLVM_EXTERNAL_PROJECTS": "llvm-spirv",
         "LLVM_EXTERNAL_LLVM_SPIRV_SOURCE_DIR": "${sourceDir}/../llvm-spirv",

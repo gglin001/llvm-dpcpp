@@ -12,6 +12,9 @@ git sparse-checkout set --no-cone \
 git sparse-checkout add \
   '!/llvm/test' '!/clang/test'
 
+git sparse-checkout add \
+  '/llvm/test/CodeGen/SPIRV'
+
 # optional
 git sparse-checkout add \
   '/lld' '/libunwind'

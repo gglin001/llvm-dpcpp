@@ -21,6 +21,7 @@
 #include "llvm/IR/TypedPointerType.h"
 #include <queue>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace llvm {

@@ -57,6 +57,7 @@
         "CMAKE_CXX_COMPILER": "${sourceDir}/../build/bin/clang++",
         "CMAKE_LINKER_TYPE": "LLD",
         "FETCHCONTENT_UPDATES_DISCONNECTED": true,
+        "LLVM_NATIVE_TOOL_DIR": "${sourceDir}/../build/bin",
         "LLVM_EXTERNAL_PROJECTS": "sycl;llvm-spirv;opencl;xpti;xptifw;libdevice;sycl-jit;lld",
         "LLVM_EXTERNAL_SYCL_SOURCE_DIR": "${sourceDir}/../sycl",
         "LLVM_EXTERNAL_LLVM_SPIRV_SOURCE_DIR": "${sourceDir}/../llvm-spirv",

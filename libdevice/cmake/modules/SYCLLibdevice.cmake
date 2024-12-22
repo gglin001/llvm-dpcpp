@@ -297,7 +297,7 @@ if (NOT MSVC AND UR_SANITIZER_INCLUDE_DIR)
                                             ${sanitizer_generic_compile_opts}
                                             ${sycl_dg2_target_opt}
                                             -D__LIBDEVICE_DG2__)
-
+  
   set(msan_obj_deps
     device.h atomic.hpp spirv_vars.h
     ${UR_SANITIZER_INCLUDE_DIR}/msan/msan_libdevice.hpp

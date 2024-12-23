@@ -23,6 +23,12 @@ git sparse-checkout add \
 git sparse-checkout add \
   '/sysroot'
 
+# optional
+# replace `llvm-spirv` with `SPIRV-LLVM-Translator`
+git sparse-checkout add \
+  '!/llvm-spirv'
+mkdir -p llvm-spirv
+
 git sparse-checkout list
 git checkout
 popd

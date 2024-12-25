@@ -42,7 +42,6 @@
       "inherits": "linux",
       "binaryDir": "${sourceDir}/../build-sycl",
       "cacheVariables": {
-        "CMAKE_SYSTEM_NAME": "Linux",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/../build-sycl/install",
         "CMAKE_C_COMPILER": "${sourceDir}/../build/bin/clang",
         "CMAKE_CXX_COMPILER": "${sourceDir}/../build/bin/clang++",

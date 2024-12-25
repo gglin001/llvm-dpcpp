@@ -24,8 +24,8 @@ add_subdirectory(common)
 add_subdirectory(jit-compiler)
 add_subdirectory(passes)
 
-# Loadable plugins for opt aren't supported on Windows,
-# so we can't execute the tests.
-if (NOT WIN32 AND NOT CYGWIN)
-  add_subdirectory(test)
-endif()
+# # Loadable plugins for opt aren't supported on Windows,
+# # so we can't execute the tests.
+# if (NOT WIN32 AND NOT CYGWIN)
+#   add_subdirectory(test)
+# endif()

@@ -11,6 +11,7 @@ option(SYCL_ADD_DEV_VERSION_POSTFIX "Adds -V postfix to version string" ON)
 option(SYCL_ENABLE_COVERAGE "Enables code coverage for runtime and unit tests" OFF)
 option(SYCL_ENABLE_STACK_PRINTING "Enables stack printing on crashes of SYCL applications" OFF)
 option(SYCL_LIB_WITH_DEBUG_SYMBOLS "Builds SYCL runtime libraries with debug symbols" OFF)
+option(SYCL_ENABLE_COMPILER "Builds SYCL compiler" ON)
 
 if (NOT SYCL_COVERAGE_PATH)
   set(SYCL_COVERAGE_PATH "${CMAKE_CURRENT_BINARY_DIR}/profiles")
@@ -146,7 +147,6 @@ set(CLANG_VERSION "${CLANG_VERSION_MAJOR}.${CLANG_VERSION_MINOR}.${CLANG_VERSION
 set(SYCL_INCLUDE_DIR "include")
 set(SYCL_INCLUDE_BUILD_DIR ${LLVM_BINARY_DIR}/${SYCL_INCLUDE_DIR})
 
-if ("sycl" IN_LIST LLVM_ENABLE_PROJECTS)
 add_llvm_external_project(opencl)
 list(FIND LLVM_ENABLE_PROJECTS opencl OPENCL_FOUND)
 if(OPENCL_FOUND EQUAL -1)
@@ -157,7 +157,6 @@ endif()
 # Compiler does automatic lookup bin/../include based on clang binary location,
 # e.g. when run LIT tests
 file(COPY ${OpenCL_INCLUDE_DIR}/CL DESTINATION ${SYCL_INCLUDE_BUILD_DIR})
-endif()
 
 # Include OpenCL Headers into final bundle.
 install(DIRECTORY ${OpenCL_INCLUDE_DIR}/CL
@@ -365,8 +364,7 @@ if (SYCL_ENABLE_XPTI_TRACING)
 endif()
 
 # SYCL toolchain builds all components: compiler, libraries, headers, etc.
-add_custom_target(sycl-compiler)
-if (0)
+if(SYCL_ENABLE_COMPILER)
 add_custom_target(sycl-compiler
   DEPENDS append-file
           clang
@@ -388,7 +386,9 @@ add_custom_target(sycl-compiler
           sycl-post-link
           opencl-aot
 )
-endif(0)
+else()
+add_custom_target(sycl-compiler)
+endif(SYCL_ENABLE_COMPILER)
 
 add_custom_target( sycl-runtime-libraries
   DEPENDS ${SYCL_RT_LIBS}
@@ -447,19 +447,7 @@ endif()
 get_property(SYCL_TOOLCHAIN_DEPS GLOBAL PROPERTY SYCL_TOOLCHAIN_INSTALL_COMPONENTS)
 # Package deploy support
 # Listed here are component names contributing the package
-set( SYCL_TOOLCHAIN_DEPLOY_COMPONENTS
-     OpenCL-Headers
-     opencl-aot
-     sycl-headers
-     sycl-headers-extras
-     sycl
-     libsycldevice
-     unified-memory-framework
-     unified-runtime-loader
-     ${XPTIFW_LIBS}
-     ${SYCL_TOOLCHAIN_DEPS}
-)
-if (0)
+if(SYCL_ENABLE_COMPILER)
 set( SYCL_TOOLCHAIN_DEPLOY_COMPONENTS
      append-file
      boost_mp11-headers
@@ -493,7 +481,20 @@ set( SYCL_TOOLCHAIN_DEPLOY_COMPONENTS
      ${XPTIFW_LIBS}
      ${SYCL_TOOLCHAIN_DEPS}
 )
-endif(0)
+else()
+set( SYCL_TOOLCHAIN_DEPLOY_COMPONENTS
+     OpenCL-Headers
+     opencl-aot
+     sycl-headers
+     sycl-headers-extras
+     sycl
+     libsycldevice
+     unified-memory-framework
+     unified-runtime-loader
+     ${XPTIFW_LIBS}
+     ${SYCL_TOOLCHAIN_DEPS}
+)
+endif(SYCL_ENABLE_COMPILER)
 
 if (WIN32)
   list(APPEND SYCL_TOOLCHAIN_DEPLOY_COMPONENTS ur_win_proxy_loader)

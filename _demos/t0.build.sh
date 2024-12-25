@@ -17,19 +17,19 @@ cmake --build build --target install
 # OSX
 # NATIVECPU_USE_OCK=ON
 
-args=(
-  buildbot/configure.py
-  --use-lld
-  --native_cpu
-  --host-target="host;RISCV;AArch64"
-  --cmake-opt="-DCMAKE_C_COMPILER=/usr/bin/clang"
-  --cmake-opt="-DCMAKE_CXX_COMPILER=/usr/bin/clang++"
-  --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_osx"
-  --cmake-opt="-DLLVM_INCLUDE_TESTS=OFF"
-  --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
-  --cmake-opt="-DNATIVECPU_USE_OCK=ON"
-)
-python "${args[@]}"
+# args=(
+#   buildbot/configure.py
+#   --use-lld
+#   --native_cpu
+#   --host-target="host;RISCV;AArch64"
+#   --cmake-opt="-DCMAKE_C_COMPILER=/usr/bin/clang"
+#   --cmake-opt="-DCMAKE_CXX_COMPILER=/usr/bin/clang++"
+#   --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_osx"
+#   --cmake-opt="-DLLVM_INCLUDE_TESTS=OFF"
+#   --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
+#   --cmake-opt="-DNATIVECPU_USE_OCK=ON"
+# )
+# python "${args[@]}"
 
 ###############################################################################
 
@@ -52,24 +52,26 @@ python "${args[@]}"
 
 ###############################################################################
 
+# linux
 # NATIVECPU_USE_OCK=ON
 
-args=(
-  buildbot/configure.py
-  --use-lld
-  --native_cpu
-  --host-target="host;RISCV;AArch64"
-  --cmake-opt="-DCMAKE_C_COMPILER=/usr/bin/clang"
-  --cmake-opt="-DCMAKE_CXX_COMPILER=/usr/bin/clang++"
-  --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_linux"
-  --cmake-opt="-DLLVM_INCLUDE_TESTS=OFF"
-  --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
-  --cmake-opt="-DNATIVECPU_USE_OCK=ON"
-)
-python "${args[@]}"
+# args=(
+#   buildbot/configure.py
+#   --use-lld
+#   --native_cpu
+#   --host-target="host;RISCV;AArch64"
+#   --cmake-opt="-DCMAKE_C_COMPILER=/usr/bin/clang"
+#   --cmake-opt="-DCMAKE_CXX_COMPILER=/usr/bin/clang++"
+#   --cmake-opt="-DFETCHCONTENT_BASE_DIR=$PWD/_demos/_deps_linux"
+#   --cmake-opt="-DLLVM_INCLUDE_TESTS=OFF"
+#   --cmake-opt="-DSYCL_INCLUDE_TESTS=OFF"
+#   --cmake-opt="-DNATIVECPU_USE_OCK=ON"
+# )
+# python "${args[@]}"
 
 ###############################################################################
 
+# linux
 # just opencl, no native_cpu, no level_zero
 
 args=(
@@ -89,7 +91,7 @@ python "${args[@]}"
 
 ###############################################################################
 
-# DEBUG
+# linux DEBUG
 # just opencl, no native_cpu, no level_zero
 
 args=(
@@ -110,6 +112,7 @@ python "${args[@]}"
 
 # only libsycl.so for debug
 cmake --build build_debug --target libsycl.so
+cmake --build build_debug --target libsycl-preview.so
 # deps:
 # libur_loader.so
 # libur_adapter_opencl.so

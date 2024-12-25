@@ -7,13 +7,17 @@ ln -s $PWD/sycl/CMakePresets.json $PWD/llvm/CMakePresets.json
 cmake --preset linux -S$PWD/llvm -B$PWD/build
 
 cmake --build $PWD/build --target all
+cmake --build $PWD/build --target install
 # cmake --build $PWD/build --target distribution
+# cmake --build $PWD/build --target install-distribution
 
 cmake --build $PWD/build --target help >_demos/cmake.target.help.log
 
 ###############################################################################
 
 cmake --preset sycl -S$PWD/llvm -B$PWD/build-sycl
+# or
+cmake --preset sycl -S$PWD/llvm -B$PWD/build-sycl -DCMAKE_BUILD_TYPE=Debug
 
 # cmake --build $PWD/build-sycl --target all
 cmake --build $PWD/build-sycl --target libsycldevice

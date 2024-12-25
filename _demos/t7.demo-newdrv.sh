@@ -12,6 +12,9 @@ args=(
   #
   -fuse-ld=lld
   #
+  # -isystem $PPWD/build-sycl/include
+  # -L$PPWD/build-sycl/lib
+  #
   # -fsycl-device-only
   -fno-sycl-use-footer
   #

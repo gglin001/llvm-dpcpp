@@ -32,5 +32,14 @@ cmake --build $PWD/build-sycl --target help >_demos/cmake.sycl.target.help.log
 
 # find build-sycl/lib -name "libsycl*.o" -printf "%f\n" | xargs -d"\n" -I{} echo {}
 find build-sycl/lib -name "libsycl*.o" -printf "%f\n" | xargs -d"\n" -I{} ln -s $PWD/build-sycl/lib/{} $PWD/build/lib/
+find build-sycl/lib -name "libsycl*.so*" -printf "%f\n" | xargs -d"\n" -I{} ln -s $PWD/build-sycl/lib/{} $PWD/build/lib/
+find build-sycl/lib -name "libsycl*.a*" -printf "%f\n" | xargs -d"\n" -I{} ln -s $PWD/build-sycl/lib/{} $PWD/build/lib/
+ln -s $PWD/build-sycl/include/CL $PWD/build/include/
+ln -s $PWD/build-sycl/include/sycl* $PWD/build/include/
+ln -s $PWD/build-sycl/include/ur* $PWD/build/include/
+
+# TODO: add libs into $PWD/build/install
+# OR
+# -isystem $PPWD/build-sycl/include -L$PPWD/build-sycl/lib
 
 ###############################################################################

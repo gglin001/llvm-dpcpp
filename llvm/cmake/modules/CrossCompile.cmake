@@ -63,8 +63,8 @@ function(llvm_create_cross_target project_name target_name toolchain buildtype)
          "${LLVM_ENABLE_RUNTIMES}")
 
   # skip projects(and FetchContent deps) for sycl building
-  # set(llvm_enable_projects_arg "")
-  # set(llvm_external_projects_arg "")
+  set(llvm_enable_projects_arg "")
+  set(llvm_external_projects_arg "")
 
   set(external_project_source_dirs)
   foreach(project ${LLVM_EXTERNAL_PROJECTS})
